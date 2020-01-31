@@ -1,0 +1,23 @@
+Here’s a rough plan. You should read up on relevant material before the semester starts if you have time. The problem setup is as following: given a set of atoms of a molecule and its mass spectrum, label the edge between each pair of atoms where an an edge may take values in {no bond, single bond, double bond, triple bond}. 
+
+I think we can start with the following baselines which will already be somewhat complicated.
+- We want to capture information about the atoms that may be useful, so features of each atom may include mass, valence, maybe position in periodic table (not sure what else may be useful, reading up on chemistry  may be helpful).
+- We want to capture information from the spectrum, which is a set of integers and its magnitude, as well from the set of atoms, so some sort of relational representation may be useful. I’m thinking a transformer type architecture may be able to capture relational information. The transformer can produce an embedding for each atom, and we can use a pair of embedding to classify an edge. (Read up on transformer.)
+- There are a lot of issues with symmetries in the outputs, e.g. there is no way to differentiate connecting a H atom with multiple C atoms so each such edge will get the exact same output but a hydrogen can only bond with a single atom. A sequential method where one edge is labeled on each iteration may be helpful to handle symmetries. After each edge is labeled, we need to update the current state -- adding the current adjacency list as features to each atom would be one way. Sequential labelling has multiple advantages including being able to enforce valence constraint (cannot label edge in violation of valence constraint at each step) and being able to generate multiple possible solutions using methods such as beam search (we actually want to have multiple outputs for the human to consider).
+- We have labeled data, so we can do imitation learning (should not need to do policy gradient or Q-learning). You may want to read up on better ways of doing imitation learning https://www.cs.cmu.edu/~sross1/publications/Ross-AIStats11-NoRegret.pdf
+A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning
+A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning others and the learned controller may be unstable. We propose a new meta-algorithm for imitation learning
+www.cs.cmu.edu
+ 
+
+We can then try to add more constraints with FGNN. Each edge is a variable in this case. The basic architecture previously described will give each variable (edge) a feature from the pair of embeddings (this gives a single variable factor). We can then add factors for constraints.
+- Have a factor for each atom consisting of all edge variables associated with an atom. Different factor for each type of atom (try to learn valence constraint). 
+
+Then we can try to add in directly designed valence constraints factors, which may enforce the constraints more strongly
+- Use the max-product algorithm to compute messages with factors that compute the valence constraints. Likely to need a dynamic programming algorithm. Then we combine the messages with the messages of the learned factors. We probably want to split the variable embeddings into two components — one component consisting of 4 values associated with the 4 types of bonds and another component for latent learned embedding to capture other information. (Read up about the max product belief propagation algorithm).
+
+If there is time, may want to think about learning other factors other than valence constraints and single variable factors (for each edge), e.g. learn factors for triples of edges corresponding to a triple of atoms. It starts to get expensive to have these higher order factors, so need to think more about how to do them.
+
+
+**Additional Note**:
+David’s code should be a good place to start to figure out how to work with the data. If David does not already have code for subgraph and graph isomorphism, you may want to look for some code for that to check whether a graph fragment is part of the correct solution. Also, David had a lot of issues with the symmetries and may have some code to deal with that. It would be good to try to transform the target training example into a canonical representation for training to make learning easier — have different features (e.g. number the nodes with one-hot vector) for nodes of the same atoms in the canonical representation to break the symmetry. Try to think of reasonable ways to break the symmetry such that similar graphs will have similar canonical representation, e.g. do SVD of the adjacency matrix and sort the node embeddings of the same type lexicographically.
