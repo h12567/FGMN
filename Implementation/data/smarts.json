@@ -1,0 +1,13 @@
+{
+  "hydroxyl": "[OX2H]",
+  "aldehyde": "[CX3H1](=O)[#6]",
+  "ketone": "[#6][CX3](=O)[#6]",
+  "amine": "[NX3;H2,H1;!$(NC=O)]",
+  "amino": "[$([NX3H2,NX4H3+]),$([NX3H](C)(C))][CX4H]([*])[CX3](=[OX1])[OX2H,OX1-,N]",
+  "amide": "[NX3][CX3](=[OX1])[#6]",
+  "ether": "[OD2]([#6])[#6]",
+  "ester": "[#6][CX3](=O)[OX2H0][#6]",
+  "carboxylic acid carboxyl": "[CX3](=O)[OX2H1]",
+  "thiol sulfhydryl" : "[#16X2H]",
+  "phenyl" : "[CH2X4][cX3]1[cX3H][cX3H][cX3H][cX3H][cX3H]1"
+}
