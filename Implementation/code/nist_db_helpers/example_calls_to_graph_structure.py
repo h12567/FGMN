@@ -93,76 +93,75 @@ def get_observation(self):
         ob['n_orbit_partitions'] = np.append(nOrbit_labels, zero_padding, axis=-1)             #shape max_atom
         return ob
 
-    @staticmethod
-    def graph_structure_properties(adj, mol):
-        '''
-        Compute a handful of properties of the graph's structure.
-        INPUT:
-            adj: Adjacency matrix 3 x n x n. The 3 come from 3 bond types. Each n x n slice contains 0's & 1's.
-            mol: The rdkit molecule object.
-        OUTPUT:
-            see return
-        '''
-        # Compute APSP:
-        A = np.sum(adj, axis=0) # n x n
-        distances, _ = floydwarshall(A)
-        mol.GetNumAtoms()
+def graph_structure_properties(adj, mol):
+    '''
+    Compute a handful of properties of the graph's structure.
+    INPUT:
+        adj: Adjacency matrix 3 x n x n. The 3 come from 3 bond types. Each n x n slice contains 0's & 1's.
+        mol: The rdkit molecule object.
+    OUTPUT:
+        see return
+    '''
+    # Compute APSP:
+    A = np.sum(adj, axis=0) # n x n
+    distances, _ = floydwarshall(A)
+    mol.GetNumAtoms()
 
-        # Compute orbits and canonical index for each connected component:
-        A = np.copy(adj)
-        A[1,:,:] = A[1,:,:]*2
-        A[2,:,:] = A[2,:,:]*3
-        A = np.sum(A, axis=0)  # n x n. Each elem has possibility 0,1,2,3
-        cc_labels = connected_components(A, n_atoms=mol.GetNumAtoms())
-        # print('cc_labels', cc_labels, len(cc_labels))
-        cc_labels = np.array(cc_labels)
-        cc_nAtoms_labels = np.ones_like(cc_labels) * -1 # number of atoms in each connected component
-        canon_labels = np.ones_like(cc_labels) * -1 # canonical labelling
-        orbit_labels = np.ones_like(cc_labels) * -1
-        nOrbit_labels = np.ones_like(cc_labels) * -1
-        n_cc = max(cc_labels) # n_cc number of connected components
-        for i_cc in range(1, n_cc+1):
-            '''
-            Find indices of atoms in this connected component:
-            '''
-            vs = np.where(cc_labels==i_cc)[0]
-            # print('index of CC:', i_cc, 'has v\'s', vs)
-            nAtoms = len(vs) 
-            cc_nAtoms_labels[vs] = nAtoms
-            # if 1 == nAtoms:
-            #     continue #skip single stand-alone atom
-            '''
-            Subset rows & colums of adjacency matrix corresponding to atoms in this connected component to get another adjacency matrix:
-            '''
-            A_cc = A[list(vs), :]
-            A_cc = A_cc[:, list(vs)]
-            # print('A_cc', A_cc)
-            cc_node_list = [mol.GetAtomWithIdx(int(v)).GetSymbol() for v in vs]  #['C', O', 'C', 'C', 'C']
-            # print('cc_node_list', cc_node_list)
-            '''
-            Create molecule of this connected component::
-            '''
-            mol_cc, _ = mol_from_graph(cc_node_list, list(A_cc))
-            mol_cc.UpdatePropertyCache()
-            # Compute canonical indexing:
-            canon_order = canonicalize(mol_cc)
-            # print_canonical_order(mol_cc)
-            # make labels:
-            for v, c in zip(vs, canon_order):
-                canon_labels[v] = c
-            
-            # Compute orbits:
-            orbits, n_orbits = compute_orbits(cc_node_list, A_cc)
-            # make labels:
-            for v, o in zip(vs, orbits):
-                orbit_labels[v] = o
-                nOrbit_labels[v] = n_orbits
+    # Compute orbits and canonical index for each connected component:
+    A = np.copy(adj)
+    A[1,:,:] = A[1,:,:]*2
+    A[2,:,:] = A[2,:,:]*3
+    A = np.sum(A, axis=0)  # n x n. Each elem has possibility 0,1,2,3
+    cc_labels = connected_components(A, n_atoms=mol.GetNumAtoms())
+    # print('cc_labels', cc_labels, len(cc_labels))
+    cc_labels = np.array(cc_labels)
+    cc_nAtoms_labels = np.ones_like(cc_labels) * -1 # number of atoms in each connected component
+    canon_labels = np.ones_like(cc_labels) * -1 # canonical labelling
+    orbit_labels = np.ones_like(cc_labels) * -1
+    nOrbit_labels = np.ones_like(cc_labels) * -1
+    n_cc = max(cc_labels) # n_cc number of connected components
+    for i_cc in range(1, n_cc+1):
         '''
-        distances,        # n x n shortest distances (# hops) between atoms.
-        cc_labels,        # [1 1 1 1 2 3 4 4 4 4 4 2 5 2]
-        cc_nAtoms_labels, # [4 4 4 4 3 1 5 5 5 5 5 3 1 3]
-        canon_labels,     # [0 3 2 1 0 0 0 3 4 1 2 2 0 1]
-        orbit_labels,     # [0 1 2 3 0 0 0 1 2 3 4 1 0 0]
-        nOrbit_labels     # [4 4 4 4 2 1 5 5 5 5 5 2 1 2]
+        Find indices of atoms in this connected component:
         '''
-        return distances, cc_labels, cc_nAtoms_labels, canon_labels, orbit_labels, nOrbit_labels
+        vs = np.where(cc_labels==i_cc)[0]
+        # print('index of CC:', i_cc, 'has v\'s', vs)
+        nAtoms = len(vs)
+        cc_nAtoms_labels[vs] = nAtoms
+        # if 1 == nAtoms:
+        #     continue #skip single stand-alone atom
+        '''
+        Subset rows & colums of adjacency matrix corresponding to atoms in this connected component to get another adjacency matrix:
+        '''
+        A_cc = A[list(vs), :]
+        A_cc = A_cc[:, list(vs)]
+        # print('A_cc', A_cc)
+        cc_node_list = [mol.GetAtomWithIdx(int(v)).GetSymbol() for v in vs]  #['C', O', 'C', 'C', 'C']
+        # print('cc_node_list', cc_node_list)
+        '''
+        Create molecule of this connected component::
+        '''
+        mol_cc, _ = mol_from_graph(cc_node_list, list(A_cc))
+        mol_cc.UpdatePropertyCache()
+        # Compute canonical indexing:
+        canon_order = canonicalize(mol_cc)
+        # print_canonical_order(mol_cc)
+        # make labels:
+        for v, c in zip(vs, canon_order):
+            canon_labels[v] = c
+
+        # Compute orbits:
+        orbits, n_orbits = compute_orbits(cc_node_list, A_cc)
+        # make labels:
+        for v, o in zip(vs, orbits):
+            orbit_labels[v] = o
+            nOrbit_labels[v] = n_orbits
+    '''
+    distances,        # n x n shortest distances (# hops) between atoms.
+    cc_labels,        # [1 1 1 1 2 3 4 4 4 4 4 2 5 2]
+    cc_nAtoms_labels, # [4 4 4 4 3 1 5 5 5 5 5 3 1 3]
+    canon_labels,     # [0 3 2 1 0 0 0 3 4 1 2 2 0 1]
+    orbit_labels,     # [0 1 2 3 0 0 0 1 2 3 4 1 0 0]
+    nOrbit_labels     # [4 4 4 4 2 1 5 5 5 5 5 2 1 2]
+    '''
+    return distances, cc_labels, cc_nAtoms_labels, canon_labels, orbit_labels, nOrbit_labels
