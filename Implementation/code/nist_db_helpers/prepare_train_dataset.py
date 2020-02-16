@@ -98,14 +98,14 @@ def extract_vertex_idxes(mol, allow_molecules):
     return vertex_arr
 
 def extract_adj_matrix(mol, possible_bonds, max_atoms):
-    E = np.zeros((len(possible_bonds), max_atoms, max_atoms))
+    E = np.zeros((len(possible_bonds) + 1, max_atoms, max_atoms))
     for b in mol.GetBonds():
         begin_idx = b.GetBeginAtomIdx()
         end_idx = b.GetEndAtomIdx()
         bond_type = b.GetBondType()
         float_array = (bond_type == np.array(possible_bonds)).astype(float)
-        E[:, begin_idx, end_idx] = float_array
-        E[:, end_idx, begin_idx] = float_array
+        E[:, begin_idx, end_idx] = np.insert(float_array, 0, 0)
+        E[:, end_idx, begin_idx] = np.insert(float_array, 0, 0)
     return E
 
 def prepare_training(
@@ -115,12 +115,14 @@ def prepare_training(
     all_mol_vertex_arr = []
     all_mol_adj_arr = []
     all_msp_arr = []
+    max_spike = -1
     for mol, spikes in generate_mols_msp():
         if is_valid_mol(
                 mol=mol, func_group=func_group, allow_molecules=allow_molecules,
                 max_constraint=max_constraint,
         ):
             vertex_arr = extract_vertex_idxes(mol, allow_molecules)
+            max_spike = max(max(spikes), max_spike)
             E = extract_adj_matrix(mol, possible_bonds, max_atoms)
             all_mol_vertex_arr.append(vertex_arr)
             all_msp_arr.append(spikes)
