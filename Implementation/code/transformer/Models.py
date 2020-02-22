@@ -21,7 +21,7 @@ class Encoder(nn.Module):
 
     def forward(self, src, mask):
         x = self.embed(src)
-        # x = self.pe(x)
+        # x = self.pe(x) #Disable the positional encoder
         for i in range(self.N):
             x = self.layers[i](x, mask)
         return self.norm(x)

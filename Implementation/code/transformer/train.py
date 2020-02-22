@@ -29,12 +29,12 @@ def train_model(epochs):
     for epoch in range(epochs):
         idxes = np.random.choice(range(len(msp_arr)), batch_size)
         src = torch.from_numpy(msp_arr[idxes].astype(int))
-        labels = torch.from_numpy(mol_adj_arr[idxes])
-        labels = labels.permute(0, 2, 3, 1)
+        labels = torch.from_numpy(mol_adj_arr[idxes]).long()
         src_mask = None
         preds = model(src, src_mask, max_atoms)
-        # loss = criterion(preds, labels)
+        loss = criterion(preds.view(-1, num_bonds_prediction), labels.view(-1))
         loss.backward()
+        print(loss)
         optimizer.step()
 
 train_model(100)

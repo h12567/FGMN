@@ -98,14 +98,14 @@ def extract_vertex_idxes(mol, allow_molecules):
     return vertex_arr
 
 def extract_adj_matrix(mol, possible_bonds, max_atoms):
-    E = np.zeros((len(possible_bonds) + 1, max_atoms, max_atoms))
+    E = np.zeros((max_atoms, max_atoms))
     for b in mol.GetBonds():
         begin_idx = b.GetBeginAtomIdx()
         end_idx = b.GetEndAtomIdx()
         bond_type = b.GetBondType()
         float_array = (bond_type == np.array(possible_bonds)).astype(float)
-        E[:, begin_idx, end_idx] = np.insert(float_array, 0, 0)
-        E[:, end_idx, begin_idx] = np.insert(float_array, 0, 0)
+        E[begin_idx, end_idx] = np.argmax(float_array) + 1
+        E[end_idx, begin_idx] = np.argmax(float_array) + 1
     return E
 
 def prepare_training(
