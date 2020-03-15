@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from tsfm.Layers import EncoderLayer
-from tsfm.Embed import Embedder, PositionalEncoder
-from tsfm.Sublayers import Norm
+from transformer.Layers import EncoderLayer
+from transformer.Embed import Embedder, PositionalEncoder
+from transformer.Sublayers import Norm
 import copy
 import torch.nn.functional as F
 
