@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from transformer.Layers import EncoderLayer
-from transformer.Embed import Embedder, PositionalEncoder
-from transformer.Sublayers import Norm
+from Layers import EncoderLayer
+from Embed import Embedder, PositionalEncoder
+from Sublayers import Norm
 import copy
 import torch.nn.functional as F
 

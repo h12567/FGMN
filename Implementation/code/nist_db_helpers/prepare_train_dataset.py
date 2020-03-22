@@ -6,6 +6,7 @@ from collections import defaultdict
 import numpy as np
 from rdkit.Chem.rdchem import BondType
 import util
+from ordering import SvdOrdering
 
 d_n = 800
 
@@ -97,16 +98,20 @@ def extract_vertex_idxes(mol, allow_molecules):
         vertex_arr.append(occur_idx)
     return vertex_arr
 
-def extract_adj_matrix(mol, possible_bonds, max_atoms):
+def extract_adj_matrix_and_order_vertices(mol, possible_bonds, vertex_arr, max_atoms):
     E = np.zeros((max_atoms, max_atoms))
     for b in mol.GetBonds():
         begin_idx = b.GetBeginAtomIdx()
+        assert b.GetBeginAtom().GetSymbol() == mol.GetAtoms()[begin_idx].GetSymbol()
         end_idx = b.GetEndAtomIdx()
+        assert b.GetEndAtom().GetSymbol() == mol.GetAtoms()[end_idx].GetSymbol()
         bond_type = b.GetBondType()
         float_array = (bond_type == np.array(possible_bonds)).astype(float)
         E[begin_idx, end_idx] = np.argmax(float_array) + 1
         E[end_idx, begin_idx] = np.argmax(float_array) + 1
-    return E
+    # extract
+    updated_E, updated_vertex_arr = SvdOrdering.order(E, vertex_arr)
+    return updated_E, updated_vertex_arr
 
 def prepare_training(
         func_group=None, allow_molecules=None, max_constraint=None,
@@ -123,10 +128,12 @@ def prepare_training(
         ):
             vertex_arr = extract_vertex_idxes(mol, allow_molecules)
             max_spike = max(max(spikes), max_spike)
-            E = extract_adj_matrix(mol, possible_bonds, max_atoms)
-            all_mol_vertex_arr.append(vertex_arr)
+            updated_E, updated_vertex_arr = extract_adj_matrix_and_order_vertices(
+                mol, possible_bonds, vertex_arr, max_atoms,
+            )
+            all_mol_vertex_arr.append(updated_vertex_arr)
             all_msp_arr.append(spikes)
-            all_mol_adj_arr.append(E)
+            all_mol_adj_arr.append(updated_E)
     np.save("vertex_arr.npy", all_mol_vertex_arr)
     np.save("mol_adj_arr.npy", all_mol_adj_arr)
     np.save("msp_arr.npy", all_msp_arr)
