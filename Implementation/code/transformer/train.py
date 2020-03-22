@@ -1,4 +1,4 @@
-from imitation.Models import Encoder, EdgeClassify, EncoderEdgeClassify
+from Models import Encoder, EdgeClassify, EncoderEdgeClassify
 import numpy as np
 import torch
 import torch.optim as optim
