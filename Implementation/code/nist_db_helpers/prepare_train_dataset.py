@@ -134,8 +134,8 @@ def prepare_training(
             all_mol_vertex_arr.append(updated_vertex_arr)
             all_msp_arr.append(spikes)
             all_mol_adj_arr.append(updated_E)
-    np.save("vertex_arr_sort.npy", all_mol_vertex_arr)
-    np.save("mol_adj_arr_sort.npy", all_mol_adj_arr)
+    np.save("../transformer/vertex_arr_sort.npy", all_mol_vertex_arr)
+    np.save("../transformer/mol_adj_arr_sort.npy", all_mol_adj_arr)
     np.save("msp_arr.npy", all_msp_arr)
 
 func_group = "ester"

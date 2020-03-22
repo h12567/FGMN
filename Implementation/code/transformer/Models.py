@@ -43,7 +43,10 @@ class EdgeClassify(nn.Module):
         final_e = final_e.new_ones((repeat_e.shape[0], repeat_e.shape[1], repeat_e.shape[2], 2 * repeat_e.shape[3])) #[bt,13,13,1024]
         for i in range(max_atoms):
             for j in range(max_atoms):
-                final_e[:,i,j,:] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                if i < j:
+                    final_e[:,i,j,:] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                else:
+                    final_e[:,i,j,:] = torch.cat((repeat_e[:, j, j, :], repeat_e[:, i, i, :]), dim=1)
             # add_extra = repeat_e[:, i, i, :] # (batch, e_out_dim) [bt,512]
             # add_extra = add_extra.unsqueeze(1) # (batch, 1, e_out_dim)
             # add_extra = add_extra.repeat(1, max_atoms, 1) # (batch, max_atoms, e_out_dim)
