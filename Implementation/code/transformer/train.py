@@ -1,10 +1,10 @@
-from tsfm.Models import Encoder, EdgeClassify, EncoderEdgeClassify
+from transformer.Models import Encoder, EdgeClassify, EncoderEdgeClassify
 import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
 import time
-from tsfm.getInput import GetInput
+from transformer.getInput import GetInput
 
 max_atoms = 13
 atom_type=4
