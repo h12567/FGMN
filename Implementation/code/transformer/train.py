@@ -1,4 +1,4 @@
-from imitation.Models import Encoder, EdgeClassify, EncoderEdgeClassify
+from Models import Encoder, EdgeClassify, EncoderEdgeClassify
 import numpy as np
 import torch
 import torch.optim as optim
@@ -58,7 +58,7 @@ def train_model(model,train_idx):
         preds = model(src, src_mask, max_atoms) #[8,13,13,4] batch-size, outwidth, outheight, out-channel
         #print(labels[0])
         #print(preds[0])
-        #print(torch.argmax(preds[0], dim=2)) the prediction matrix
+        print(torch.argmax(preds[0], dim=2)) # the prediction matrix
         loss = criterion(preds.view(-1, num_bonds_prediction), labels.view(-1))
         loss.backward()
         optimizer.step()
@@ -120,5 +120,5 @@ def transformer(epoch):
     #torch.save(model.state_dict(),'model1.pt')
     #test(model,range(177, 180))
 
-transformer(3)
+transformer(300)
 
