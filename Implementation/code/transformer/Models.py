@@ -42,7 +42,10 @@ class EdgeClassify(nn.Module):
             (repeat_e.shape[0], repeat_e.shape[1], repeat_e.shape[2], 2 * repeat_e.shape[3]))  # [bt,13,13,d_m*2]
         for i in range(max_atoms):
             for j in range(max_atoms):
-                final_e[:, i, j, :] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                if i < j:
+                    final_e[:, i, j, :] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                else:
+                    final_e[:, i, j, :] = torch.cat((repeat_e[:, j, j, :], repeat_e[:, i, i, :]), dim=1)
         final_e = self.fl(final_e)  # [8,13,13,4]
         return final_e
 
@@ -64,7 +67,10 @@ class EdgeClassify2(nn.Module):
             (repeat_e.shape[0], repeat_e.shape[1], repeat_e.shape[2], 2 * repeat_e.shape[3]))  # [bt,13,13,d_m*2]
         for i in range(max_atoms):
             for j in range(max_atoms):
-                final_e[:, i, j, :] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                if i < j:
+                    final_e[:, i, j, :] = torch.cat((repeat_e[:, i, i, :], repeat_e[:, j, j, :]), dim=1)
+                else:
+                    final_e[:, i, j, :] = torch.cat((repeat_e[:, j, j, :], repeat_e[:, i, i, :]), dim=1)
         final_e = self.fl(final_e)  # [8,13,13,4]
         return final_e
 
