@@ -96,4 +96,3 @@ def transformer(epoch):
 
 transformer(16)
 
-
