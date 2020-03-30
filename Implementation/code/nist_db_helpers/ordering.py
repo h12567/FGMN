@@ -52,6 +52,7 @@ class SvdOrdering(OrderingBase):
         solution = eigenValuesAndVectors(mat)
         eigenvalues = solution[0]
         eigenvectors_sort_indices = np.argsort(eigenvalues)
+        new_E = np.zeros(E.shape)
 
         for atom_type in range(0, max(vertex_arr)+1):
             row_idxes = np.where(np.array(vertex_arr) == atom_type)[0]
@@ -64,10 +65,12 @@ class SvdOrdering(OrderingBase):
             for i in range(len(row_idxes)):
                 # Because we need to sort the vertex_arr in order of atom_type, so group C together
                 # group O together for example. Therefore, need to re-arrange adj_matrix E as well.
-                E = cls._swap_row(E, current_adj_row_idx, row_idxes[sort_idxes[i]])
-                E = cls._swap_col(E, current_adj_row_idx, row_idxes[sort_idxes[i]])
-                vertex_arr = cls._swap_vertex(vertex_arr, current_adj_row_idx, row_idxes[sort_idxes[i]])
+                # E = cls._swap_row(E, current_adj_row_idx, row_idxes[sort_idxes[i]])
+                new_E[current_adj_row_idx, :] = E[row_idxes[sort_idxes[i]], :]
+                # E = cls._swap_col(E, current_adj_row_idx, row_idxes[sort_idxes[i]])
+                new_E[:, current_adj_row_idx] = E[:, row_idxes[sort_idxes[i]]]
+                # vertex_arr = cls._swap_vertex(vertex_arr, current_adj_row_idx, row_idxes[sort_idxes[i]])
                 current_adj_row_idx += 1
 
         vertex_arr.sort()
-        return E, vertex_arr
+        return new_E, vertex_arr
