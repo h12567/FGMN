@@ -1,10 +1,10 @@
-from transformer.Models import Encoder, EdgeClassify, EncoderEdgeClassify
+from Models import Encoder, EdgeClassify, EncoderEdgeClassify
 import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
 import time
-from transformer.getInput import GetInput
+from getInput import GetInput
 
 max_atoms = 13
 atom_type=4
@@ -14,18 +14,18 @@ d_model = 18 # size of atom embedding after encorder
 heads =  3# number of heads in multi-head attention
 N = 3 # number of loops of encoderLayer
 dropout = 0.1
-batch_size = 8
+batch_size = 1
 num_bonds_prediction = 4 # (no_bond, single, double, triple)
 
 model = EncoderEdgeClassify(src_vocab, d_model, N, heads, dropout, msp_len, max_atoms, num_bonds_prediction)
-vertex_arr = np.load("../nist_db_helpers/vertex_arr.npy", allow_pickle=True) #225
-mol_adj_arr = np.load("../nist_db_helpers/mol_adj_arr.npy", allow_pickle=True)
+vertex_arr = np.load("../transformer/vertex_arr_sort_svd.npy", allow_pickle=True) #225
+mol_adj_arr = np.load("../transformer/mol_adj_arr_sort_svd.npy", allow_pickle=True)
 msp_arr = np.load("../nist_db_helpers/msp_arr.npy", allow_pickle=True)
 
 weights = [1/119, 1/20,1/16,1/10] #[ 1 / number of instances for each class]
 class_weights = torch.FloatTensor(weights)
 criterion = nn.CrossEntropyLoss(weight=class_weights)
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=0.0005, momentum=0.9)
 new_inputs = GetInput(vertex_arr, msp_arr, max_atoms, atom_type, k=30, type=4)
 new_inputs = new_inputs.detach().numpy()
 
@@ -47,6 +47,7 @@ def train_model(model,train_idx):
         preds = model(src, src_mask, max_atoms) #[8,13,13,4] batch-size, outwidth, outheight, out-channel
         print(preds.shape,labels.shape)
         print(torch.argmax(preds[0], dim=2))
+        print(labels[0])
         loss = criterion(preds.view(-1,num_bonds_prediction), labels.view(-1))
         loss.backward()
         optimizer.step()
@@ -91,11 +92,11 @@ def test(model,test_idx):
 def transformer(epoch):
     for i in range(1,1+epoch):
         print("epoch: ",i)
-        train_model(model, range(100,116))
+        train_model(model, range(100,101))
         #evaluate(model, range(120, 121))
     # torch.save(model.state_dict(), 'modeltsfm.pt')
     # test(model,range(187, 190))
 
 
-transformer(16)
+transformer(60000)
 
