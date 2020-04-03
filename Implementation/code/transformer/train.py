@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn as nn
 import time
 from getInput import GetInput
+from pre_knowledge import generate_pre_knowledge_adj_mat
 
 max_atoms = 13
 atom_type=4
@@ -29,11 +30,23 @@ optimizer = optim.SGD(model.parameters(), lr=0.0005, momentum=0.9)
 new_inputs = GetInput(vertex_arr, msp_arr, max_atoms, atom_type, k=30, type=4)
 new_inputs = new_inputs.detach().numpy()
 
+func_group_knowledge = [
+    (0, [(2, 1), (2, 2)]), # this means atom type 0 connects to atom type 2 with bond 1 and atom type 2 with bond 2
+]
+
+num_extra_nodes = new_inputs.shape[1] - max_atoms
+all_pre_distance_matrix = []
+for i, E in enumerate(mol_adj_arr):
+    new_E = generate_pre_knowledge_adj_mat(vertex_arr[i], num_extra_nodes,
+                                           E, func_group_knowledge)
+    all_pre_distance_matrix.append(new_E)
+all_pre_distance_matrix = np.array(all_pre_distance_matrix)
 
 def train_model(model,train_idx):
     model.train()
     src_data = new_inputs[train_idx]
     label_data = mol_adj_arr[train_idx]
+    pre_distance_matrix = all_pre_distance_matrix[train_idx]
 
     for batch, i in enumerate(range(0, len(src_data), batch_size)):
         optimizer.zero_grad()
@@ -44,7 +57,7 @@ def train_model(model,train_idx):
         # exit(0)
         labels = torch.from_numpy(label_data[i:i+seq_len]).long() #[batch, max-atom,max-atom]=[8,13,13]
         src_mask = None
-        preds = model(src, src_mask, max_atoms) #[8,13,13,4] batch-size, outwidth, outheight, out-channel
+        preds = model(src, src_mask, max_atoms, pre_distance_matrix) #[8,13,13,4] batch-size, outwidth, outheight, out-channel
         print(preds.shape,labels.shape)
         print(torch.argmax(preds[0], dim=2))
         print(labels[0])

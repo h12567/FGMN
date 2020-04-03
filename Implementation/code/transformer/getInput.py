@@ -69,11 +69,4 @@ def GetInput(vertex_arr, msp_arr, max_atoms, atoms_type, k=30, type=1):
         new_msp = embedding(new_msp)  # (N,1,k,17)
         new_msp = F.normalize(new_msp, p=2, dim=2)  # normalized msp
         new_inputs[:, max_atoms:, :-1] = new_msp
-
     return new_inputs
-
-
-
-
-
-
