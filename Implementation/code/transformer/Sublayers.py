@@ -20,18 +20,27 @@ class Norm(nn.Module):
                / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
         return norm
 
-def attention(q, k, v, d_k, mask=None, dropout=None):
+def attention(q, k, v, embedded_pre_distance_matrix,
+              self_attention_weight, distance_mat_weight,
+              d_k, mask=None, dropout=None):
     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 
     if mask is not None:
         mask = mask.unsqueeze(1)
         scores = scores.masked_fill(mask == 0, -1e9)
 
+    embedded_pre_distance_matrix = embedded_pre_distance_matrix.squeeze(dim=3)
+    scores = self_attention_weight * scores + distance_mat_weight * embedded_pre_distance_matrix
     scores = F.softmax(scores, dim=-1)
+    print("WEIGHTS IN ATTENTION LAYERS")
+    print(self_attention_weight)
+    print(distance_mat_weight)
 
     if dropout is not None:
         scores = dropout(scores)
 
+    # scores shape: (1, 3, 43, 43) -> 3 heads, 43 nodes
+    # pre_distance_matrix: (1, 43, 43)
     output = torch.matmul(scores, v)
     return output
 
@@ -47,10 +56,15 @@ class MultiHeadAttention(nn.Module):
         self.v_linear = nn.Linear(d_model, d_model)
         self.k_linear = nn.Linear(d_model, d_model)
 
+        # 6 is :[ no bond info, 1 bond, 2 bond, 3 bond, 4 bond, unapplicable (for between atom and msp node)]
+        self.distance_mat_transform = nn.Embedding(6, 1)
+
         self.dropout = nn.Dropout(dropout)
         self.out = nn.Linear(d_model, d_model)
+        self.self_attention_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
+        self.distance_mat_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
 
-    def forward(self, q, k, v, mask=None):
+    def forward(self, q, k, v, pre_distance_matrix, mask=None):
         bs = q.size(0)
 
         # perform linear operation and split into N heads
@@ -63,8 +77,11 @@ class MultiHeadAttention(nn.Module):
         q = q.transpose(1, 2)
         v = v.transpose(1, 2)
 
+        embedded_pre_distance_matrix = self.distance_mat_transform(pre_distance_matrix)
         # calculate attention using function we will define next
-        scores = attention(q, k, v, self.d_k, mask, self.dropout)
+        scores = attention(q, k, v, embedded_pre_distance_matrix,
+                           self.self_attention_weight, self.distance_mat_weight,
+                           self.d_k, mask, self.dropout)
         # concatenate heads and put through final linear layer
         concat = scores.transpose(1, 2).contiguous() \
             .view(bs, -1, self.d_model)
