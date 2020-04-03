@@ -6,10 +6,8 @@ from Sublayers import Norm
 import copy
 import torch.nn.functional as F
 
-
 def get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
-
 
 class Encoder(nn.Module):
     def __init__(self, vocab_size, d_model, N, heads, dropout):
@@ -20,12 +18,12 @@ class Encoder(nn.Module):
         self.layers = get_clones(EncoderLayer(d_model, heads, dropout), N)
         self.norm = Norm(d_model)
 
-    def forward(self, src, mask):
+    def forward(self, src, mask, pre_distance_matrix):
         #x = self.embed(src)
         x=src #[N, 13, 47] float32
         #x = self.pe(x) #Disable the positional encoder
         for i in range(self.N):
-            x = self.layers[i](x, mask)
+            x = self.layers[i](x, mask, pre_distance_matrix)
         return x
 
 class EdgeClassify(nn.Module):
@@ -80,8 +78,8 @@ class EncoderEdgeClassify(nn.Module):
         self.encoder = Encoder(vocab_size, d_model, N, heads, dropout)
         self.edge_classify = EdgeClassify2(msp_len, max_atoms, d_model, num_bonds_prediction)
 
-    def forward(self, src, mask, max_atoms):
-        output = self.encoder(src, mask) #[batch, 43, 18]
+    def forward(self, src, mask, max_atoms, pre_distance_matrix):
+        pre_distance_matrix = torch.LongTensor(pre_distance_matrix)
+        output = self.encoder(src, mask, pre_distance_matrix) #[batch, 43, 18]
         output = self.edge_classify(output, max_atoms)
         return output
-
