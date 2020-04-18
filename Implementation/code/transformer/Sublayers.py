@@ -25,16 +25,23 @@ def attention(q, k, v, embedded_pre_distance_matrix,
               d_k, mask=None, dropout=None):
     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 
+    is_pre_knowledge_used = True
+
+    num_heads = scores.shape[1]
+
     if mask is not None:
         mask = mask.unsqueeze(1)
         scores = scores.masked_fill(mask == 0, -1e9)
 
     embedded_pre_distance_matrix = embedded_pre_distance_matrix.squeeze(dim=3)
-    scores = self_attention_weight * scores + distance_mat_weight * embedded_pre_distance_matrix
+    embedded_pre_distance_matrix = embedded_pre_distance_matrix.unsqueeze(dim=1)
+    embedded_pre_distance_matrix = embedded_pre_distance_matrix.repeat(1, num_heads, 1, 1) # Shape:(bs, num_heads, 13+k, 13+k)
+
+    if is_pre_knowledge_used:
+        scores = self_attention_weight  * scores + \
+                 distance_mat_weight  * embedded_pre_distance_matrix
+
     scores = F.softmax(scores, dim=-1)
-    print("WEIGHTS IN ATTENTION LAYERS")
-    print(self_attention_weight)
-    print(distance_mat_weight)
 
     if dropout is not None:
         scores = dropout(scores)
@@ -61,8 +68,10 @@ class MultiHeadAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
         self.out = nn.Linear(d_model, d_model)
-        self.self_attention_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
-        self.distance_mat_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
+        # self.self_attention_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
+        # self.distance_mat_weight = torch.autograd.Variable(torch.rand(1), requires_grad = True)
+        self.self_attention_weight = nn.Parameter(torch.rand(1), requires_grad=True)
+        self.distance_mat_weight = nn.Parameter(torch.rand(1), requires_grad=True)
 
     def forward(self, q, k, v, pre_distance_matrix, mask=None):
         bs = q.size(0)
