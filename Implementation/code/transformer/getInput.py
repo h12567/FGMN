@@ -103,7 +103,6 @@ def GetInput(vertex_arr, msp_arr, max_atoms, atoms_type, d_model=32, k=30, type=
         embedding2 = nn.Embedding(800, d_model * (max_atoms + atoms_type))
         new_msp = embedding2(new_msp)  # (N,1,k,17)
         new_msp = F.normalize(new_msp, p=2, dim=2)  # normalized msp
-        new_inputs[:, max_atoms:, :] = new_msp
     elif type == 6:
         new_inputs = torch.zeros((len(vertex_arr), max_atoms + k, d_model * (max_atoms + atoms_type)),
                                  dtype=torch.float32)  # [N,13+k,304]
@@ -165,13 +164,5 @@ def getBondNum(mol_adj_arr,max_atoms):
     for i in range(len(bond_num)):
         bond_num[i] = 1/bond_num[i]
     return bond_num
-
-
-
-
-
-
-
-
 
 
