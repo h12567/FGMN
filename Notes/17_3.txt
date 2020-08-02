@@ -1,0 +1,31 @@
+Rethink definition of vocabulary size.
+
+Let's say atom is [0, 0, 1, 0,    1, 0 ,0 , 0]
+13 atoms 
+
+transform 800 to (13, k) or (k ,8)? feasible?  
+
+
+INPUT PROBLEM:
+
+Let's say (13, k + 8) (combine msp and atoms)
+then should it be 800 -> (1,k) and duplicate 13 times. Or 800 -> (13,k) ?
+
+First approach cons: k is much bigger than 8, so all inputs are like almost the same.
+
+Second approach cons: needs to find an order of assigning each of 13 msp vectors to each of 13 atoms (maybe in canonical order)? 
+Note: Doesn't matter if each of the 13 msp component does not contain all information, because later in self-attention they will attend each other.
+
+
+Let's say (13+k, 8) -> Cons: mix of 13 entries of types atoms and k entries of types mass spectrum mismatch so maybe a problem.
+
+
+
+OUTPUT PROBLEM: 
+
+Use SVD to sort the atoms in ground truth
+
+In last layer, if we just use fully connected layer then cannot control the weight => cannot guarantee symmetry => need change.
+
+
+** Why convert to all bonds of 0 ?? **
