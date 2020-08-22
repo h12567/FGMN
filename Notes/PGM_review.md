@@ -17,4 +17,7 @@ https://www.merl.com/publications/docs/TR2011-087.pdf
 
 http://www.utstat.toronto.edu/~rsalakhu/sta4273/notes/Lecture5.pdf
 
-https://www.cs.cmu.edu/~aarti/Class/10704_Spring15/lecs/lec25.pdf(VERY IMPORTANT TO UNDERSTAND BP)
+https://www.cs.cmu.edu/~aarti/Class/10704_Spring15/lecs/lec25.pdf(VERY IMPORTANT TO UNDERSTAND BP)``
+
+
+https://cseweb.ucsd.edu/classes/sp06/cse151/lectures/belief-propagation.pdf (GOOD IDEA)

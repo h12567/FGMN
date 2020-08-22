@@ -13,9 +13,9 @@ class EncoderLayer(nn.Module):
         self.dropout_1 = nn.Dropout(dropout)
         self.dropout_2 = nn.Dropout(dropout)
 
-    def forward(self, x, mask, pre_distance_matrix):
+    def forward(self, x, mask):
         x2 = self.norm_1(x)
-        x = x + self.dropout_1(self.attn(x2, x2, x2, pre_distance_matrix, mask))
+        x = x + self.dropout_1(self.attn(x2, x2, x2, mask))
         x2 = self.norm_2(x)
         x = x + self.dropout_2(self.ff(x2))
         return x

@@ -7,13 +7,18 @@ import copy
 from tsfm.Layers import EncoderLayer
 from tsfm.Sublayers import Norm
 from tsfm.Embed import PositionalEncoder
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 vertex_arr = np.load("../tsfm/vertex_arr_sort_per.npy", allow_pickle=True) #1843
-mol_adj_arr = np.load("../tsfm/mol_adj_arr_sort_per.npy", allow_pickle=True)
-msp_arr = np.load("../tsfm/msp_arr_sort_per.npy", allow_pickle=True)
-H_num = np.load("../tsfm/h_num_per.npy", allow_pickle=True)
+# 1843 molecules, each stores [0, 2, 2, 0]
 
+mol_adj_arr = np.load("../tsfm/mol_adj_arr_sort_per.npy", allow_pickle=True)
+# (1843, 13, 13) adjacency matrix of the bonds
+
+msp_arr = np.load("../tsfm/msp_arr_sort_per.npy", allow_pickle=True)
+# (1843, 800)
+H_num = np.load("../tsfm/h_num_per.npy", allow_pickle=True)
+# (1843, 2)
 
 msp_len = 800
 k = 20
@@ -34,7 +39,7 @@ max_atoms = 13  # 3
 max_len11 = 3 * edge_num + k
 max_len12 = 2 * edge_num + k
 
-def countH(h_num):
+def  countH(h_num):
     count = 0
     if "H" in h_num:
         temp = h_num.split('H')
@@ -654,24 +659,24 @@ def plot_result(epoch):
     y2 = tran_loss_list
     y3 = valid_acc_list
     y4 = valid_loss_list
-    plt.subplot(2, 1, 1)
-    plt.plot(x1, y1, '-', label="Train_Accuracy")
-    plt.plot(x1, y3, '-', label="Valid_Accuracy")
-    plt.ylabel('Accuracy')
-    plt.legend(loc='best')
-    plt.subplot(2, 1, 2)
-    plt.plot(x2, y2, '-', label="Train_Loss")
-    plt.plot(x2, y4, '-', label="Valid_Loss")
-    plt.xlabel('epoch')
-    plt.ylabel('Loss')
-    plt.legend(loc='best')
-    plt.show()
+    # plt.subplot(2, 1, 1)
+    # plt.plot(x1, y1, '-', label="Train_Accuracy")
+    # plt.plot(x1, y3, '-', label="Valid_Accuracy")
+    # plt.ylabel('Accuracy')
+    # plt.legend(loc='best')
+    # plt.subplot(2, 1, 2)
+    # plt.plot(x2, y2, '-', label="Train_Loss")
+    # plt.plot(x2, y4, '-', label="Valid_Loss")
+    # plt.xlabel('epoch')
+    # plt.ylabel('Loss')
+    # plt.legend(loc='best')
+    # plt.show()
 def train_transformer(epoch, num):
-    model.load_state_dict(torch.load('model_type11.pkl'))
+    # model.load_state_dict(torch.load('model_type11.pkl'))
     for i in range(1, 1 + epoch):
         train31(model, i, num)
         evaluate31(model, i, range(1600, 1610))
-    #torch.save(model.state_dict(),'model_type12.pkl')
+    torch.save(model.state_dict(),'model_type12.pkl')
     plot_result(epoch)
 
 train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list = [],[],[],[]
