@@ -4,10 +4,10 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
-from tsfm.Layers import EncoderLayer,DecoderLayer
+from tsfm.Layers import EncoderLayer#,DecoderLayer
 from tsfm.Sublayers import Norm
 from tsfm.Embed import PositionalEncoder
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 vertex_arr = np.load("../tsfm/vertex_arr_sort_per.npy", allow_pickle=True) #1843
 mol_adj_arr = np.load("../tsfm/mol_adj_arr_sort_per.npy", allow_pickle=True)
@@ -164,37 +164,38 @@ class Classify12(nn.Module):  # transformer with edge as well
         output = self.ll1(output)  # [batch, max_len12, edge_num]
         output = output.permute(0, 2, 1)  # [batch, edge_num, max_len12]
         output = self.ll2(output)  # [batch, edge_num, 4]
-        output = output.masked_fill(self.mask,-1e9)
+        output = output.masked_fill(self.mask.bool(), -1e9)
         output = F.log_softmax(output, dim=-1)
         return output  # [batch, edge_num=3, bond=4]
 #with decoder
-class Classify13(nn.Module):
-    def __init__(self, padding_idx):
-        super().__init__()
-        heads = 4
-        self.N = 1
-        self.padding_idx = padding_idx
-        self.embedding = nn.Embedding(msp_len, d_model, self.padding_idx)
-        self.enc_layers = get_clones(EncoderLayer(d_model, heads, dropout), self.N)
-        self.dec_layers = get_clones(DecoderLayer(d_model, heads, dropout), self.N)
-        self.norm = Norm(d_model)
-        self.ll = nn.Linear(d_model*k, 4)
-    def forward(self, src, dec_input,next_dec):
-        self.mask = get_pad_mask13(next_dec)  # [batch, edge_num,4]
-        dec_input = dec_input.view(src.size(0),-1)
-        enc_mask = get_pad_mask(src, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
-        #dec_mask = get_pad_mask(dec_input, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
-        enc_output = self.embedding(src)  # [batch, k, d_model=512]
-        for i in range(self.N):
-            enc_output = self.enc_layers[i](enc_output,enc_mask)
-        dec_input = self.embedding(dec_input)
-        for i in range(self.N):
-            output = self.dec_layers[i](dec_input, enc_output,None,None)
-        output = output.view(src.size(0),-1)
-        output = self.ll(output)
-        output = output.masked_fill(self.mask, -1e9)
-        output = F.log_softmax(output, dim=-1)
-        return output  # [batch, edge_num=3, bond=4]
+# class Classify13(nn.Module):
+#     def __init__(self, padding_idx):
+#         super().__init__()
+#         heads = 4
+#         self.N = 1
+#         self.padding_idx = padding_idx
+#         self.embedding = nn.Embedding(msp_len, d_model, self.padding_idx)
+#         self.enc_layers = get_clones(EncoderLayer(d_model, heads, dropout), self.N)
+#         self.dec_layers = get_clones(DecoderLayer(d_model, heads, dropout), self.N)
+#         self.norm = Norm(d_model)
+#         self.ll = nn.Linear(d_model*k, 4)
+#     def forward(self, src, dec_input,next_dec):
+#         self.mask = get_pad_mask13(next_dec)  # [batch, edge_num,4]
+#         dec_input = dec_input.view(src.size(0),-1)
+#         enc_mask = get_pad_mask(src, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
+#         #dec_mask = get_pad_mask(dec_input, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
+#         enc_output = self.embedding(src)  # [batch, k, d_model=512]
+#         for i in range(self.N):
+#             enc_output = self.enc_layers[i](enc_output,enc_mask)
+#         dec_input = self.embedding(dec_input)
+#         for i in range(self.N):
+#             output = self.dec_layers[i](dec_input, enc_output,None,None)
+#         output = output.view(src.size(0),-1)
+#         output = self.ll(output)
+#         output = output.masked_fill(self.mask, -1e9)
+#         output = F.log_softmax(output, dim=-1)
+#         return output  # [batch, edge_num=3, bond=4]
+
 class Classify31(nn.Module):  # transformer with edge as well
     def __init__(self, padding_idx):
         super().__init__()
@@ -803,20 +804,21 @@ def plot_result(epoch):
     y2 = tran_loss_list
     y3 = valid_acc_list
     y4 = valid_loss_list
-    plt.subplot(2, 1, 1)
-    plt.plot(x1, y1, '-', label="Train_Accuracy")
-    plt.plot(x1, y3, '-', label="Valid_Accuracy")
-    plt.ylabel('Accuracy')
-    plt.legend(loc='best')
-    plt.subplot(2, 1, 2)
-    plt.plot(x2, y2, '-', label="Train_Loss")
-    plt.plot(x2, y4, '-', label="Valid_Loss")
-    plt.xlabel('epoch')
-    plt.ylabel('Loss')
-    plt.legend(loc='best')
-    plt.show()
+    # plt.subplot(2, 1, 1)
+    # plt.plot(x1, y1, '-', label="Train_Accuracy")
+    # plt.plot(x1, y3, '-', label="Valid_Accuracy")
+    # plt.ylabel('Accuracy')
+    # plt.legend(loc='best')
+    # plt.subplot(2, 1, 2)
+    # plt.plot(x2, y2, '-', label="Train_Loss")
+    # plt.plot(x2, y4, '-', label="Valid_Loss")
+    # plt.xlabel('epoch')
+    # plt.ylabel('Loss')
+    # plt.legend(loc='best')
+    # plt.show()
 def train_transformer(epoch, num):
     for i in range(1, 1 + epoch):
+        print("ITER " + str(i))
         train12(model, i, num)
         evaluate12(model, i, range(1500, 1700))
     #torch.save(model.state_dict(),'model_type12_svd.pkl')
