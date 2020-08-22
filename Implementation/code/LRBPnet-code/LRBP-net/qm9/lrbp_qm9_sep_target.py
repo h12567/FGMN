@@ -137,9 +137,9 @@ class Net(torch.nn.Module):
         zeros(self.weight)
 
     def forward(self, data):
-        atoms = data.x[:,:5].argmax(dim=1)
-        edge_attr = data.edge_attr_2[:,:4].contiguous()
-        adj = to_dense_adj(data.edge_index_2, batch=None, edge_attr=edge_attr.argmax(-1)+1).squeeze(0)
+        atoms = data.x[:,:5].argmax(dim=1) # Shape: (1147)
+        edge_attr = data.edge_attr_2[:,:4].contiguous() # Shape(2366, 4)
+        adj = to_dense_adj(data.edge_index_2, batch=None, edge_attr=edge_attr.argmax(-1)+1).squeeze(0) # (1147, 1147)
         fact, fact_type, atom_type, atom_edges = get_factorsntypes(adj, self.order, atoms=atoms,
                                     edge_index=data.edge_index, edge_attr=data.edge_attr)
         out = F.relu(self.lin0(data.x))
@@ -189,7 +189,8 @@ mean, std = mean[:, target].item(), std[:, target].item()
 # Split datasets.
 tenpercent = int(len(dataset) * 0.1)
 #Standardize input
-norm_ids = torch.LongTensor([5,12])#13,14,15
+# norm_ids = torch.LongTensor([5,12])#13,14,15
+norm_ids = torch.LongTensor([5, 10])
 mn = dataset.data.x[tenpercent:][:,norm_ids].mean(dim=0,keepdims=True)
 st = dataset.data.x[tenpercent:][:,norm_ids].std(dim=0,keepdims=True)
 dataset.data.x[:,norm_ids] = (dataset.data.x[:,norm_ids] - mn) / st
