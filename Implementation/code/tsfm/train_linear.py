@@ -5,19 +5,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import time
+import tsfm.getInput as getInput
 
-vertex_arr = np.load("../tsfm/vertex_arr_sort_per.npy", allow_pickle=True) #1843
-mol_adj_arr = np.load("../tsfm/mol_adj_arr_sort_per.npy", allow_pickle=True)
+vertex_arr = np.load("../tsfm/vertex_arr_test.npy", allow_pickle=True) #1843
+mol_adj_arr = np.load("../tsfm/mol_adj_arr_test.npy", allow_pickle=True)
 msp_arr = np.load("../tsfm/msp_arr_sort_per.npy", allow_pickle=True)
-H_num = np.load("../tsfm/h_num_per.npy", allow_pickle=True)
-# vertex_arr = np.load("../tsfm/vertex_arr_sort_svd.npy", allow_pickle=True)  # 1843
-# mol_adj_arr = np.load("../tsfm/mol_adj_arr_sort_svd.npy", allow_pickle=True)
-# msp_arr = np.load("../tsfm/msp_arr_sort.npy", allow_pickle=True)
 msp_len = 800
 k=20
 atom_type=2
 padding_idx = 799 #must > 0 and < msp_len
-dropout = 0.3
+dropout = 0.1
 batch_size = 1
 atom_mass = [12,1,16,14] #[12,1,16]
 atomic_number = [[1,0,0],[0,0,0],[0,1,0],[0,0,1]] #[C, H, O, N}
@@ -29,7 +26,7 @@ edge_num = 78 #3#29*15#78 #3
 d_model=256
 max_atoms = 13 # 3
 max_len0 = 300
-max_len1 = 3 * edge_num + k
+max_len1 = 15 * edge_num + k
 
 def get_pad_mask(seq, pad_idx):
     return (seq != pad_idx)#.unsqueeze(-2)
@@ -47,8 +44,8 @@ def get_pad_mask1(seq):
     mask =  torch.ByteTensor([[[False]*4]*edge_num]*seq.size(0)) #torch.zeros((seq.size(0),seq.size(1),4))
     for b in range(seq.size(0)):
         for i in range(edge_num):
-            if seq[b,i*3]==padding_idx: mask[b,i] = torch.ByteTensor([0,1,1,1])
-            if seq[b, i * 3] == 16 or seq[b, i * 3+1] == 16 : mask[b, i] = torch.ByteTensor([0, 0, 0, 1])
+            if seq[b,i*15]==padding_idx: mask[b,i] = torch.ByteTensor([0,1,1,1])
+            if seq[b, i * 15] == 16 or seq[b, i * 15+1] == 16 : mask[b, i] = torch.ByteTensor([0, 0, 0, 1])
     return mask
 
 class Classify0(nn.Module): #linear
@@ -73,11 +70,14 @@ class Classify1(nn.Module):
         self.embedding = nn.Embedding(msp_len, d_model, padding_idx)
         self.ll1 = nn.Linear(d_model, edge_num)
         self.ll2 = nn.Linear(max_len1, 4)
+        self.dropout1 = nn.Dropout(0.1)
+        self.dropout2 = nn.Dropout(0.3)
 
     def forward(self, src):
         self.mask = get_pad_mask1(src)  # [batch, edge_num,4]
         output = self.embedding(src)  # [batch, max_len=45, d_model]
         output = self.ll1(output)  # [batch, max_len=45, edge_num=3]
+        #output = F.relu(self.dropout1(output))
         output = output.permute(0, 2, 1)  # [batch, edge_num, max_len = 45]
         output = self.ll2(output)  # [batch, edge_num=3, bond=4]
         output = output.masked_fill(self.mask, -1e9)
@@ -110,17 +110,17 @@ def getInput0(vertex, msp): #linear
                 if idx == k: break
     return src
 def getInput1(vertex, msp):
-    # [A1-weight, A2-weight, 1 1 0,A1, A3,1 1 1  A2, A3,1 0 0 msp1[x], ...,mspk[x]] 45
+    # [A1-weight, A2-weight, 1 1 0,A1, A3,1 1 1  A2, A3,1 0 0 msp1[x], ...,mspk[x]] 45 = k + edge_num* *
     src = torch.LongTensor([[padding_idx] * max_len1] * len(vertex))  # [batch, 45]
     for b in range(len(vertex)):
         idx1 = 0
         for i in range(max_atoms):
             for ii in range(i + 1, max_atoms):
                 if i < len(vertex[b]) and ii < len(vertex[b]):
-                    src[b, idx1 * 3], src[b, idx1 * 3 + 1] = atom_mass[int(vertex[b][i])], atom_mass[int(vertex[b][ii])]
-                    src[b, idx1 * 3 + 2] = idx1 + 1
+                    src[b, idx1 * 15], src[b, idx1 * 15 + 1] = atom_mass[int(vertex[b][i])], atom_mass[int(vertex[b][ii])]
+                    src[b, idx1 * 15: idx1 * 15 + len(vertex[b])] = torch.LongTensor([int(jj==i or jj==ii) for jj in range(len(vertex[b]))])
                 idx1 += 1
-        idx = 3 * edge_num
+        idx = 15 * edge_num
         for j in range(1, len(msp[b]) - 1):
             if msp[b][j - 1] < msp[b][j] and msp[b][j + 1] < msp[b][j]:
                 src[b, idx] = j
@@ -224,6 +224,36 @@ def evaluate0(model,epoch,num):
         print("valid mean_accs: ", round(sum(accs)/len(accs),4))
         valid_acc_list.append(round(sum(accs)/len(accs),4))
         valid_loss_list.append(round(total_loss / len(num), 4))
+def test0(model,epoch,num):
+    vertex_arr_test = np.load("../tsfm/vertex_arr_test.npy", allow_pickle=True)  # 1843
+    mol_adj_arr_test = np.load("../tsfm/mol_adj_arr_test.npy", allow_pickle=True)
+    msp_arr = np.load("../tsfm/msp_arr_sort.npy", allow_pickle=True)
+    model.eval()
+    vertex_data = vertex_arr_test[num]
+    mol_adj_data = mol_adj_arr_test[num]
+    msp_arr_data = msp_arr[num]
+    total_loss = 0
+    accs = []
+    with torch.no_grad():
+        for batch, i in enumerate(range(0, len(num), batch_size)):
+            seq_len = min(batch_size, len(num) - i)
+            src = getInput0(vertex_data[i:i + seq_len], msp_arr_data[i:i + seq_len])
+            labels = getLabel(mol_adj_data[i:i + seq_len],vertex_data[i:i+seq_len])
+            label_graph = mol_adj_data[i:i + seq_len]
+            preds = model(src,vertex_data[i:i + seq_len])  # batch, 3, 4
+            preds_bond = torch.argmax(preds, dim=2)  # batch 3
+
+            loss = criterion(preds.contiguous().view(-1, 4), labels.view(-1))
+            total_loss += loss.item()
+            acc, preds_graph = accuracy(preds_bond, label_graph,vertex_data[i:i+seq_len])
+            accs += acc
+            if (epoch-1) % 50 == 0 and batch==0:
+                print(label_graph[0])
+                print(preds_graph[0])
+        print("test mean_loss: ", round(total_loss / len(num), 4))
+        print("test mean_accs: ", round(sum(accs)/len(accs),4))
+        test_acc_list.append(round(sum(accs)/len(accs),4))
+        test_loss_list.append(round(total_loss / len(num), 4))
 #linear edge
 def train1(model, epoch, num):
     model.train()
@@ -241,8 +271,15 @@ def train1(model, epoch, num):
         preds = model(src)  # batch, 3, 4
         preds_bond = torch.argmax(preds, dim=2)  # batch 3
 
+        atom_lists = getInput.find_permutation(vertex_data[i])
+        losses = []
+        for al in atom_lists:
+            new_E = getInput.getGraph(labels_graph[0],al)
+            loss = criterion(preds.view(-1, 4), torch.Tensor([new_E]).view(-1))
+            losses.append(loss)
+        loss = min(losses)
+        #loss = criterion(preds.view(-1, 4), labels.view(-1))
         optimizer.zero_grad()
-        loss = criterion(preds.view(-1, 4), labels.view(-1))
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -272,7 +309,14 @@ def evaluate1(model, epoch, num):
             preds = model(src)  # batch, 3, 4
             preds_bond = torch.argmax(preds, dim=2)  # batch 3
 
-            loss = criterion(preds.contiguous().view(-1, 4), labels.view(-1))
+            #loss = criterion(preds.contiguous().view(-1, 4), labels.view(-1))
+            atom_lists = getInput.find_permutation(vertex_data[i])
+            losses = []
+            for al in atom_lists:
+                new_E = getInput.getGraph(labels_graph[0], al)
+                loss = criterion(preds.view(-1, 4), torch.Tensor([new_E]).view(-1))
+                losses.append(loss)
+            loss = min(losses)
             total_loss += loss.item()
             acc, preds_graph = accuracy(preds_bond, labels_graph, vertex_data[i:i + seq_len])
             accs += acc
@@ -294,13 +338,19 @@ def test1(model, epoch, num):
         for batch, i in enumerate(range(0, len(num), batch_size)):
             seq_len = min(batch_size, len(num) - i)
             src = getInput1(vertex_data[i:i + seq_len], msp_arr_data[i:i + seq_len])
-            print(vertex_data[i:i+1])
             labels = getLabel(mol_adj_data[i:i + seq_len], vertex_data[i:i + seq_len])
             labels_graph = mol_adj_data[i:i + seq_len]
             preds = model(src)  # batch, 3, 4
             preds_bond = torch.argmax(preds, dim=2)  # batch 3
 
-            loss = criterion(preds.contiguous().view(-1, 4), labels.view(-1))
+            #loss = criterion(preds.contiguous().view(-1, 4), labels.view(-1))
+            atom_lists = getInput.find_permutation(vertex_data[i])
+            losses = []
+            for al in atom_lists:
+                new_E = getInput.getGraph(labels_graph[0], al)
+                loss = criterion(preds.view(-1, 4), torch.Tensor([new_E]).view(-1))
+                losses.append(loss)
+            loss = min(losses)
             total_loss += loss.item()
             acc, preds_graph = accuracy(preds_bond, labels_graph, vertex_data[i:i + seq_len])
             accs += acc
@@ -309,6 +359,8 @@ def test1(model, epoch, num):
                 print(preds_graph[0])
         print("test mean_loss: ", round(total_loss / len(num), 4))
         print("test mean_accs: ", round(sum(accs) / len(accs), 4))
+        test_acc_list.append(round(sum(accs) / len(accs), 4))
+        test_loss_list.append(round(total_loss / len(num), 4))
 #linear reinforce
 def train20(model,epoch,num):
     vertex_arr = np.load("../tsfm/vertex_arr_sort_svd.npy", allow_pickle=True)  # 1843
@@ -434,18 +486,18 @@ model = Classify1(padding_idx)
 optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
 criterion = nn.NLLLoss(ignore_index=padding_idx) #CrossEntropyLoss()
 def train_linear(epoch,num):
-    #model.load_state_dict(torch.load('model_type0.pkl'))
+    #model.load_state_dict(torch.load('model_linear_1.pkl'))
     for i in range(1,1+epoch):
         train1(model,i,num)
-        evaluate1(model, i,range(1500,1550))
+        evaluate1(model, i,range(1500,1600))
         #test1(model, i, range(1700, 1800))
-    #torch.save(model.state_dict(),'model_type0.pkl')
+    #torch.save(model.state_dict(),'model_linear_1.pkl')
     plot_result(epoch)
 
 
-train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list = [],[],[],[]
+train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list, test_acc_list, test_loss_list = [],[],[],[], [], []
 s = time.time()
-train_linear(200,num=range(10))
+train_linear(200,num=range(1500))
 e= time.time()
 print(e-s)
 
