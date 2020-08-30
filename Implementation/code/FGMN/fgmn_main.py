@@ -1,5 +1,6 @@
 import os.path as osp
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn import Sequential, Linear, ReLU, GRU
@@ -10,17 +11,20 @@ from torch_geometric.utils import remove_self_loops, to_dense_adj
 import torch_geometric.transforms as T
 import matplotlib.pyplot as plt
 
-from FGMN_dataset import FGMNDataset
+from FGMN_dataset_2 import FGMNDataset
+import utils
 
 dim = 64
 bond_type = 4
 lr_mult=1
 b=lr_mult*64
-num_epoches=3
+num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
 EDGE_VARIABLE = 2
 MSP_VARIABLE = 3
+EDGE_FACTOR = 4
+MSP_FACTOR = 5
 
 class Complete(object):
     def __call__(self, data):
@@ -28,24 +32,24 @@ class Complete(object):
         data.edge_attr_2 = data.edge_attr.clone()
         data.edge_index_2 = data.edge_index.clone()
 
-        row = torch.arange(data.num_nodes, dtype=torch.long, device=device)
-        col = torch.arange(data.num_nodes, dtype=torch.long, device=device)
-
-        row = row.view(-1, 1).repeat(1, data.num_nodes).view(-1)
-        col = col.repeat(data.num_nodes)
-        edge_index = torch.stack([row, col], dim=0)
-
-        edge_attr = None
-        if data.edge_attr is not None:
-            idx = data.edge_index[0] * data.num_nodes + data.edge_index[1]
-            size = list(data.edge_attr.size())
-            size[0] = data.num_nodes * data.num_nodes
-            edge_attr = data.edge_attr.new_zeros(size)
-            edge_attr[idx] = data.edge_attr
-
-        edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
-        data.edge_attr = edge_attr
-        data.edge_index = edge_index
+        # row = torch.arange(data.num_nodes, dtype=torch.long, device=device)
+        # col = torch.arange(data.num_nodes, dtype=torch.long, device=device)
+        #
+        # row = row.view(-1, 1).repeat(1, data.num_nodes).view(-1)
+        # col = col.repeat(data.num_nodes)
+        # edge_index = torch.stack([row, col], dim=0)
+        #
+        # edge_attr = None
+        # if data.edge_attr is not None:
+        #     idx = data.edge_index[0] * data.num_nodes + data.edge_index[1]
+        #     size = list(data.edge_attr.size())
+        #     size[0] = data.num_nodes * data.num_nodes
+        #     edge_attr = data.edge_attr.new_zeros(size)
+        #     edge_attr[idx] = data.edge_attr
+        #
+        # edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
+        # data.edge_attr = edge_attr
+        # data.edge_index = edge_index
 
         return data
 
@@ -55,6 +59,7 @@ class Net(torch.nn.Module):
         self.lin0 = torch.nn.Linear(dataset.num_features, dim)
 
         nn = Sequential(Linear(1, 32), ReLU(), Linear(32, dim * dim))
+        self.order = 5
         self.conv = NNConv(dim, dim, nn, aggr='mean')
         self.gru = GRU(dim, dim)
 
@@ -63,8 +68,23 @@ class Net(torch.nn.Module):
     def forward(self, data):
         # nodes = data.x
         # edge_attr = data.edge_attr_2
+
         out = F.relu(self.lin0(data.x))
         h = out.unsqueeze(0)
+
+        edge_attr = data.edge_attr_2[:, :4].contiguous()
+        # adj = to_dense_adj(data.edge_index_2, batch=None,
+        #                    edge_attr=edge_attr.argmax(-1)+1).squeeze(0)
+
+        # fact, fact_type = utils.get_edgeatomfactorsntypes(
+        #     adj, nodes=data.x,
+        #     edge_index_2=data.edge_index_2,
+        #     edge_attr_2=data.edge_attr_2
+        # )
+
+        # get_factorsntypes(adj, self.order, atoms=data.x,
+        #                   edge_index=data.edge_index, edge_attr=data.edge_attr)
+
         for k in range(3):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
@@ -110,6 +130,12 @@ def train():
     for data in train_loader:
         data = data.to(device)
         optimizer.zero_grad()
+
+        # node_input_idx = torch.flatten((data.x[:, 0] <= 3).nonzero())
+        # node_data = data.x[node_input_idx]
+        # factor_idx = torch.flatten((data.x[:, 0] > 3).nonzero())
+        # factor_data = data.x[factor_idx]
+
         edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
         out = model(data)
         # pred = torch.argmax(out, dim=1)
@@ -164,4 +190,6 @@ plot_result(num_epoches)
 
 save_file = "models/model.pth"
 torch.save(model.state_dict(), save_file)
+np.save("acc_data/train_acc_list.npy", np.array(train_acc_list))
+np.save("acc_data/train_loss_list.npy", np.array(train_loss_list))
 a = 1

@@ -271,7 +271,8 @@ def train1(model, epoch, num):
         preds = model(src)  # batch, 3, 4
         preds_bond = torch.argmax(preds, dim=2)  # batch 3
 
-        atom_lists = getInput.find_permutation(vertex_data[i])
+        atom_lists = getInput.find_per
+        -mutation(vertex_data[i])
         losses = []
         for al in atom_lists:
             new_E = getInput.getGraph(labels_graph[0],al)
