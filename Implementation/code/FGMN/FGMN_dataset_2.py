@@ -72,7 +72,7 @@ class FGMNDataset(InMemoryDataset):
                 edge_idx.append([num_atoms + int((num_atoms**2 - num_atoms) / 2) + i, atom_idx])
                 # edge_idx.append([atom_idx, num_atoms + int((num_atoms**2 - num_atoms) / 2) + i])
                 for _ in range(1):
-                    edge_attr.append([1])
+                    edge_attr.append([2])
             # factor_features.append([self.MSP_FACTOR, num_atoms + num_atoms**2 + i] + list(range(num_atoms))
             #                        + [-1] * (13 - num_atoms))
             # factor_labels.append(-1)

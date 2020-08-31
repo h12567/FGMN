@@ -12,6 +12,7 @@ import torch_geometric.transforms as T
 import matplotlib.pyplot as plt
 
 from FGMN_dataset_2 import FGMNDataset
+from fgmn_layer import FGNetTypeB
 import utils
 
 dim = 64
@@ -64,6 +65,7 @@ class Net(torch.nn.Module):
         self.gru = GRU(dim, dim)
 
         self.linLast = torch.nn.Linear(dim, bond_type)
+        self.f1 = FGNetTypeB(num_iters=1, order=self.order, in_dim=dim, rank=512)
 
     def forward(self, data):
         # nodes = data.x
@@ -73,22 +75,25 @@ class Net(torch.nn.Module):
         h = out.unsqueeze(0)
 
         edge_attr = data.edge_attr_2[:, :4].contiguous()
-        # adj = to_dense_adj(data.edge_index_2, batch=None,
-        #                    edge_attr=edge_attr.argmax(-1)+1).squeeze(0)
+        adj = to_dense_adj(data.edge_index_2, batch=None,
+                           edge_attr=edge_attr.argmax(-1)+1).squeeze(0)
 
-        # fact, fact_type = utils.get_edgeatomfactorsntypes(
-        #     adj, nodes=data.x,
-        #     edge_index_2=data.edge_index_2,
-        #     edge_attr_2=data.edge_attr_2
-        # )
-
-        # get_factorsntypes(adj, self.order, atoms=data.x,
-        #                   edge_index=data.edge_index, edge_attr=data.edge_attr)
+        fact_l, fact_dim_l = utils.get_edgeatomfactorsntypes(
+            adj, dim, bond_type,
+            nodes=data.x,
+            edge_index_2=data.edge_index_2,
+            edge_attr_2=data.edge_attr_2,
+        )
 
         for k in range(3):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
             out = out.squeeze(0)
+
+        out2 = out
+
+        for i in range(len(fact_l)):
+            x_1 = self.f1(data.x, out, fact_l[i], fact_dim_l[i], fact_type="B").unsqueeze(0)
 
         out = F.log_softmax(self.linLast(out), dim=-1)
         # edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
