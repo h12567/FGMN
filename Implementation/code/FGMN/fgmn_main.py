@@ -3,6 +3,7 @@ import os.path as osp
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.nn.parameter import Parameter
 from torch.nn import Sequential, Linear, ReLU, GRU
 
 from torch_geometric.data import DataLoader
@@ -12,13 +13,13 @@ import torch_geometric.transforms as T
 import matplotlib.pyplot as plt
 
 from FGMN_dataset_2 import FGMNDataset
-from fgmn_layer import FGNetTypeB
+from fgmn_layer import FGNet
 import utils
 
 dim = 64
 bond_type = 4
 lr_mult=1
-b=lr_mult*64
+b=lr_mult*32
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -58,6 +59,9 @@ class Net(torch.nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.lin0 = torch.nn.Linear(dataset.num_features, dim)
+        self.lin1 = torch.nn.Linear(dim, bond_type)
+        self.linUp = torch.nn.Linear(bond_type, dim)
+        self.linDown = torch.nn.Linear(dim, bond_type)
 
         nn = Sequential(Linear(1, 32), ReLU(), Linear(32, dim * dim))
         self.order = 5
@@ -65,7 +69,14 @@ class Net(torch.nn.Module):
         self.gru = GRU(dim, dim)
 
         self.linLast = torch.nn.Linear(dim, bond_type)
-        self.f1 = FGNetTypeB(num_iters=1, order=self.order, in_dim=dim, rank=512)
+        self.f1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="B")
+        self.f_mod_B = torch.nn.ModuleList()
+        self.f_mod_B.extend([self.f1])
+
+        self.weight = Parameter(torch.Tensor(1, dim))
+        self.linear = torch.nn.Linear(dim, dim)
+        self.weight_edges = Parameter(torch.Tensor(1, bond_type))
+        self.linear_edges = torch.nn.Linear(bond_type, bond_type)
 
     def forward(self, data):
         # nodes = data.x
@@ -90,16 +101,27 @@ class Net(torch.nn.Module):
             out, h = self.gru(m.unsqueeze(0), h)
             out = out.squeeze(0)
 
-        out2 = out
+        out_edges = F.relu(self.lin1(out))# (num_nodes, bond_type)
+        # out_edges = torch.zeros(out.shape[0], bond_type).cuda()
+
+        # conv_1 = out
 
         for i in range(len(fact_l)):
-            x_1 = self.f1(data.x, out, fact_l[i], fact_dim_l[i], fact_type="B").unsqueeze(0)
+            ###### START FACTOR B MESSAGE PASSING ##################################################
+            edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
+            out_edges_upscale = self.linUp(out_edges.clone())
+            out_combine = out.clone()
+            out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
+            msg = self.f_mod_B[i](data.x, out_combine, fact_l[i], fact_dim_l[i], fact_type="B").unsqueeze(0)
+            msg_to_edge = self.linDown(msg)
 
-        out = F.log_softmax(self.linLast(out), dim=-1)
-        # edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
-        # return pred[edge_indicator_idx]
-        # return pred
-        return out
+            out = out + F.relu(self.linear((self.weight * msg.sum(dim=0))))
+            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * msg_to_edge.sum(dim=0))))
+            ########################################################################################
+
+        # out = F.log_softmax(self.linLast(out), dim=-1
+        out_edges_final = F.log_softmax(out_edges, dim=-1)
+        return out_edges_final
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -132,6 +154,7 @@ def train():
     loss_all, acc_all, base_acc_all = 0, 0, 0
     # lf = torch.nn.L1Loss()
     lf = torch.nn.NLLLoss()
+    torch.autograd.set_detect_anomaly(True)
     for data in train_loader:
         data = data.to(device)
         optimizer.zero_grad()
@@ -193,8 +216,8 @@ for i in range(1, 1 + num_epoches):
     train_acc_list.append(acc)
 plot_result(num_epoches)
 
-save_file = "models/model.pth"
+save_file = "models/model2.pth"
 torch.save(model.state_dict(), save_file)
-np.save("acc_data/train_acc_list.npy", np.array(train_acc_list))
-np.save("acc_data/train_loss_list.npy", np.array(train_loss_list))
+np.save("acc_data/train_acc_list2.npy", np.array(train_acc_list))
+np.save("acc_data/train_loss_list2.npy", np.array(train_loss_list))
 a = 1
