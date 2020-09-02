@@ -9,6 +9,8 @@ EDGE_VARIABLE = 2
 MSP_VARIABLE = 3
 EDGE_FACTOR = 4
 MSP_FACTOR = 5
+EDGEATOM_EDGE_INDEX = 1
+MSPATOM_EDGE_INDEX = 2
 
 def get_edgeatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr_2):
 
@@ -22,9 +24,9 @@ def get_edgeatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_att
     # res_np = np.intersect1d(a, b)
     # res = torch.from_numpy(res_np)
 
-    edge_variable_idxes = torch.flatten((edge_attr_2[:, 0] == 1).nonzero())
+    edgeatom_edge_idxes = torch.flatten((edge_attr_2[:, 0] == EDGEATOM_EDGE_INDEX).nonzero())
 
-    edge_index_short = edge_index_2[:, edge_variable_idxes]
+    edge_index_short = edge_index_2[:, edgeatom_edge_idxes]
 
     fact = None
 
@@ -60,6 +62,42 @@ def get_edgeatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_att
     # fact = nodes[edge_factor_index][:, 1:4]
     # fact = nodes[edge_factor_index][:, 1:4]
 
+    fact_l = [fact]
+    fact_dim_l = [fact_dim]
+    return fact_l, fact_dim_l
 
-    return [fact], [fact_dim]
+def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr_2):
+    mspatom_edge_idxes = torch.flatten((edge_attr_2[:, 0] == MSPATOM_EDGE_INDEX).nonzero())
 
+    edge_index_short = edge_index_2[:, mspatom_edge_idxes]
+
+    fact_l = [None] * (14-6+1)
+    fact_dim_l = []
+
+    i = 0
+    cur_msp_node_idx = edge_index_short[0][i]
+
+    while i < (edge_index_short.shape[1] - 1):
+
+        atom_node_idx_arr = []
+        while i < (edge_index_short.shape[1] - 1) and edge_index_short[0][i] == cur_msp_node_idx:
+            atom_node_idx_arr.append(edge_index_short[1][i])
+            i += 1
+
+        tmp = torch.stack(
+            [cur_msp_node_idx] + atom_node_idx_arr
+        )
+
+        fact_len_idx = len(atom_node_idx_arr) - 5
+
+        if fact_l[fact_len_idx] is not None:
+            fact_l[fact_len_idx] = torch.cat([fact_l[fact_len_idx], tmp.view(1, -1)])
+        else:
+            fact_l[fact_len_idx] = tmp.view(1, -1)
+
+        cur_msp_node_idx = edge_index_short[0][i]
+
+        i += 1
+
+    # output: list of fact, where each fact is (num_factors, 6 -> 14)
+    return fact_l, fact_dim_l

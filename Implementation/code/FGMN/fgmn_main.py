@@ -96,6 +96,13 @@ class Net(torch.nn.Module):
             edge_attr_2=data.edge_attr_2,
         )
 
+        utils.get_mspatomfactorsntypes(
+            adj, dim, bond_type,
+            nodes=data.x,
+            edge_index_2=data.edge_index_2,
+            edge_attr_2=data.edge_attr_2,
+        )
+
         for k in range(3):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
