@@ -64,7 +64,7 @@ def get_edgeatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_att
 
     fact_l = [fact]
     fact_dim_l = [fact_dim]
-    return fact_l, fact_dim_l
+    return fact_l
 
 def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr_2):
     mspatom_edge_idxes = torch.flatten((edge_attr_2[:, 0] == MSPATOM_EDGE_INDEX).nonzero())
@@ -100,4 +100,4 @@ def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr
         i += 1
 
     # output: list of fact, where each fact is (num_factors, 6 -> 14)
-    return fact_l, fact_dim_l
+    return fact_l

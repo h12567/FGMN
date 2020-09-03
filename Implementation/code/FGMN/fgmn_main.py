@@ -19,7 +19,7 @@ import utils
 dim = 64
 bond_type = 4
 lr_mult=1
-b=lr_mult*32
+b=lr_mult*16
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -69,9 +69,14 @@ class Net(torch.nn.Module):
         self.gru = GRU(dim, dim)
 
         self.linLast = torch.nn.Linear(dim, bond_type)
-        self.f1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="B")
+
+        self.fB1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="B")
         self.f_mod_B = torch.nn.ModuleList()
-        self.f_mod_B.extend([self.f1])
+        self.f_mod_B.extend([self.fB1])
+
+        self.fC1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="C")
+        self.f_mod_C = torch.nn.ModuleList()
+        self.f_mod_C.extend([self.fC1])
 
         self.weight = Parameter(torch.Tensor(1, dim))
         self.linear = torch.nn.Linear(dim, dim)
@@ -89,14 +94,14 @@ class Net(torch.nn.Module):
         adj = to_dense_adj(data.edge_index_2, batch=None,
                            edge_attr=edge_attr.argmax(-1)+1).squeeze(0)
 
-        fact_l, fact_dim_l = utils.get_edgeatomfactorsntypes(
+        fact_l_B = utils.get_edgeatomfactorsntypes(
             adj, dim, bond_type,
             nodes=data.x,
             edge_index_2=data.edge_index_2,
             edge_attr_2=data.edge_attr_2,
         )
 
-        utils.get_mspatomfactorsntypes(
+        fact_l_C = utils.get_mspatomfactorsntypes(
             adj, dim, bond_type,
             nodes=data.x,
             edge_index_2=data.edge_index_2,
@@ -113,18 +118,29 @@ class Net(torch.nn.Module):
 
         # conv_1 = out
 
-        for i in range(len(fact_l)):
-            ###### START FACTOR B MESSAGE PASSING ##################################################
-            edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
-            out_edges_upscale = self.linUp(out_edges.clone())
-            out_combine = out.clone()
-            out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
-            msg = self.f_mod_B[i](data.x, out_combine, fact_l[i], fact_dim_l[i], fact_type="B").unsqueeze(0)
-            msg_to_edge = self.linDown(msg)
+        ################## PREPARING OUT_COMBINE ##########################################################
+        edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
+        out_edges_upscale = self.linUp(out_edges.clone())
+        out_combine = out.clone()
+        out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
+        ##################################################################################################
 
-            out = out + F.relu(self.linear((self.weight * msg.sum(dim=0))))
-            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * msg_to_edge.sum(dim=0))))
-            ########################################################################################
+
+        for k in range(1):
+            all_msg, all_msg_to_edge = None, None
+            for i in range(len(fact_l_B)): #this length is always 1
+                msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B").unsqueeze(0)
+                msg_to_edge = self.linDown(msg)
+                all_msg, all_msg_to_edge = msg, msg_to_edge
+
+            for i in range(len(fact_l_C)):
+                if fact_l_C[i] is not None:
+                    msg = self.f_mod_C[k](data.x, out_combine, fact_l_C[i], fact_type="C").unsqueeze(0)
+                    all_msg = torch.cat([all_msg, msg])
+
+            out = out + F.relu(self.linear((self.weight * all_msg.sum(dim=0))))
+            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * all_msg_to_edge.sum(dim=0))))
+
 
         # out = F.log_softmax(self.linLast(out), dim=-1
         out_edges_final = F.log_softmax(out_edges, dim=-1)
