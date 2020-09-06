@@ -11,6 +11,7 @@ EDGE_FACTOR = 4
 MSP_FACTOR = 5
 EDGEATOM_EDGE_INDEX = 1
 MSPATOM_EDGE_INDEX = 2
+EDGEEDGE_EDGE_INDEX = 3
 
 def get_edgeatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr_2):
 
@@ -97,7 +98,43 @@ def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr
 
         cur_msp_node_idx = edge_index_short[0][i]
 
-        i += 1
+        # i += 1
 
     # output: list of fact, where each fact is (num_factors, 6 -> 14)
+    return fact_l
+
+def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_attr_2):
+    edgeedge_edge_idxes = torch.flatten((edge_attr_2[:, 0] == EDGEEDGE_EDGE_INDEX).nonzero())
+
+    edge_index_short = edge_index_2[:, edgeedge_edge_idxes]
+
+    sort_idx = torch.sort(edge_index_short[0, :])
+
+    edge_index_short_2 = edge_index_short[:, sort_idx.indices]
+
+    fact_l = [None] * (12 - 4 + 1)
+
+    i = 0
+    cur_atom_node_idx = edge_index_short_2[0][i]
+
+    while i < (edge_index_short_2.shape[1] - 1):
+
+        atom_node_idx_arr = []
+        while i < (edge_index_short_2.shape[1] - 1) and edge_index_short_2[0][i] == cur_atom_node_idx:
+            atom_node_idx_arr.append(edge_index_short_2[1][i])
+            i += 1
+
+        tmp = torch.stack(
+            [cur_atom_node_idx] + atom_node_idx_arr
+        )
+
+        fact_len_idx = len(atom_node_idx_arr) - 4
+
+        if fact_l[fact_len_idx] is not None:
+            fact_l[fact_len_idx] = torch.cat([fact_l[fact_len_idx], tmp.view(1, -1)])
+        else:
+            fact_l[fact_len_idx] = tmp.view(1, -1)
+
+        cur_atom_node_idx = edge_index_short_2[0][i]
+
     return fact_l

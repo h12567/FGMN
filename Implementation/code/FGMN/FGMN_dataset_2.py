@@ -40,7 +40,7 @@ class FGMNDataset(InMemoryDataset):
 
     def get_edge_nodes(self, mol_adj_arr, num_atoms, node_features, node_labels, edge_idx, edge_attr,
                        factor_features, factor_labels):
-        total_edges_so_far = 0
+        total_edges_nodes_so_far = 0
         for x in range(num_atoms):
             for y in range(x+1, num_atoms):
             # for y in range(num_atoms):
@@ -50,15 +50,22 @@ class FGMNDataset(InMemoryDataset):
                 # edge_idx.append([num_atoms + x * num_atoms + y, y])
                 # edge_idx.append([num_atoms + x * num_atoms + (y - x - 1), x])
                 # edge_idx.append([num_atoms + x * num_atoms + (y - x - 1), y])
-                edge_idx.append([num_atoms + total_edges_so_far, x])
-                edge_idx.append([num_atoms + total_edges_so_far, y])
-                total_edges_so_far += 1
+                edge_idx.append([num_atoms + total_edges_nodes_so_far, x])
+                edge_idx.append([num_atoms + total_edges_nodes_so_far, y])
                 # edge_idx.append([x, num_atoms + x * num_atoms + y])
                 # edge_idx.append([y, num_atoms + x * num_atoms + y])
                 # factor_features.append([self.EDGE_FACTOR, num_atoms+ x*num_atoms + y, x, y] + [-1] * 11)
                 # factor_labels.append(-1)
                 for _ in range(2):
                     edge_attr.append([1])
+
+                edge_idx.append([x, num_atoms + total_edges_nodes_so_far])
+                edge_idx.append([y, num_atoms + total_edges_nodes_so_far])
+
+                for _ in range(2):
+                    edge_attr.append([3])
+
+                total_edges_nodes_so_far += 1
 
     def get_msp_nodes(self, msp_arr, k, num_atoms, node_features, node_labels, edge_idx, edge_attr,
                       factor_features, factor_labels):

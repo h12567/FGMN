@@ -3,19 +3,69 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 
-class HardConstraintNet(nn.Module):
-    pass
+class ValenceNet():
+    def __init__(self):
+        # super(ValenceNet, self).__init__()
+        self.atom_valence_mapping = {
+            0: 4, #Carbon
+            1: 1, #Hydrogen
+            2: 2, #Oxygen
+            3: 3, #Nitrogen
+        }
+
+    def compute(self, x, nodes, fact):
+        nodes = nodes.clone()
+        a = 1
+        # nodes: (num_nodes, 4)
+
+        atom_idxes, edge_idxes = fact[:, 0], fact[:, 1:]
+        atoms_nodes, edges = x[atom_idxes], nodes[edge_idxes]
+        atom_types = atoms_nodes[:, 1].tolist()
+        valences = [self.atom_valence_mapping[i] for i in atom_types]
+        valences = torch.tensor(valences)
+        # edges: (num_factors, num_neighbors, bond_type)
+
+        max_valence = 4
+        num_factors, num_edges_per_factor, max_bond_type = edges.size(0), edges.size(1), edges.size(2) - 1
+        node_msg = torch.zeros(1, x.size(0), max_bond_type+1).cuda()
+
+        for msg_to in range(0, edges.size(1)):
+            # msg_to = edges.size(1) - 1
+            edges_clone = edges.clone()
+            temp = edges_clone[:, -1, :]
+            edges_clone[:, -1, :] = edges_clone[:, msg_to, :]
+            edges_clone[:, msg_to, :] = temp
+            msgs = torch.zeros(num_factors, num_edges_per_factor, max_valence + 1, max_bond_type + 1).cuda()
+            msgs = msgs.clone()
+            temp_msg = torch.ones([num_factors, max_valence + 1, max_bond_type + 1]).cuda()
+            for i in range(0, msg_to+1):
+                # temp_msg: (num_factors, max_bond_type)
+                for j in range(max_valence + 1):
+                    max_possible_bond_type = min(j, max_bond_type)
+                    # temp_msg = torch.tensor([[1] * (max_possible_bond_type + 1)] * num_factors)
+                    # sub_temp_msg = temp_msg[:, :(max_possible_bond_type + 1), :]
+                    sub_temp_msg = temp_msg[:, (j - max_possible_bond_type):(j+1), :]
+                    new_info = edges_clone[:, i, :(max_possible_bond_type+1)]
+                    new_info = torch.flip(new_info, [1])
+                    new_info = torch.unsqueeze(new_info, 2)
+                    msgs = msgs.clone()
+                    msgs[:, i, j, :] = torch.sum(sub_temp_msg * new_info, dim=1).clone()
+                temp_msg = msgs[:, i, :, :]
+
+            msg_recipient = fact[:, msg_to+1] #(num_factor)
+            # msg_last = msgs[:, msg_to, :, :] #(num_factor, max_valence+1, max_bond_type)
+            msg_last = msgs[:, -1, :, :].clone()
+            for i, node_idx in enumerate(msg_recipient):
+                node_msg[0, node_idx, :] = msg_last[i, valences[i], :]
+
+        return node_msg
 
 class HighOrderNet(nn.Module):
-    def __init__(self, order=3, in_dim=512, out_dim=512, hidden_dim=None, fact_type=None):
+    def __init__(self, in_dim=512, out_dim=512, hidden_dim=None, fact_type=None):
         super(HighOrderNet, self).__init__()
         self.in_dim = in_dim
         self.hidden_dim = self.in_dim if hidden_dim is None else hidden_dim
         self.out_dim = out_dim
-        self.order = order
-        self.mods = nn.ModuleList()
-        for i in range(self.order):
-            self.mods.append(nn.Linear(self.in_dim, self.hidden_dim, bias=True))
         self.fc = nn.Linear(self.hidden_dim, out_dim, bias=True)
         self.linear_list = nn.ModuleList()
 
@@ -27,6 +77,8 @@ class HighOrderNet(nn.Module):
             self.num_params = self.max_num_atoms**2
         elif self.fact_type == "C":
             self.num_params = self.max_msp_index
+        elif self.fact_type == "A":
+            self.num_params = self.max_num_atoms
 
         self.params = Parameter(torch.FloatTensor(self.num_params, self.hidden_dim, self.out_dim))
         self.bias = Parameter(torch.FloatTensor(self.num_params, 1, self.out_dim))
@@ -50,6 +102,9 @@ class HighOrderNet(nn.Module):
         elif self.fact_type == "C":
             msp_nodes = x[fact[:, 0]][:, 2]
             ids = msp_nodes
+        elif self.fact_type == "A":
+            atom_nodes = x[fact[:, 0]][:, 1]
+            ids = atom_nodes
 
         weights = self.params.view(self.num_params, self.hidden_dim * self.out_dim)[ids.long()].contiguous()
         bias = self.bias[ids.long()]
@@ -63,10 +118,11 @@ class HighOrderNet(nn.Module):
 # so when calculating nodes_to_edges, separating out based on dimension before calculating
 # the messages
 class FGNet(nn.Module):
-    def __init__(self, num_iters=3, order=3, in_dim=13, rank=128, num_classes=26, fact_type=None):
+    def __init__(self, num_iters=3, in_dim=13, rank=128, num_classes=26, fact_type=None):
         super(FGNet, self).__init__()
         self.rank = rank
-        self.latent_dim = 64
+        # self.latent_dim = 64
+        self.latent_dim = in_dim
         self.bond_type = 4
         self.max_num_atoms = 13
         self.max_msp_index = 1000
@@ -78,12 +134,13 @@ class FGNet(nn.Module):
             self.num_params = self.max_num_atoms**2
         elif self.fact_type == "C":
             self.num_params = self.max_msp_index
+        elif self.fact_type == "A":
+            self.num_params = self.max_num_atoms
 
         self.highorder_func = nn.ModuleList()
         self.max_order = 14
         for i in range(self.max_order):
             self.highorder_func.append(HighOrderNet(
-                order=2,
                 in_dim=self.latent_dim, out_dim=self.latent_dim,
                 hidden_dim=self.rank, fact_type=fact_type,
             ))
@@ -119,6 +176,9 @@ class FGNet(nn.Module):
             elif self.fact_type == "C":
                 msp_nodes = x[fact[:, 0]][:, 2]
                 ids = msp_nodes
+            elif self.fact_type == "A":
+                atom_nodes = x[fact[:, 0]][:, 1]
+                ids = atom_nodes
 
             rnodes = nodes[sub_fact[:, i]]
 

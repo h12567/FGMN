@@ -13,13 +13,13 @@ import torch_geometric.transforms as T
 import matplotlib.pyplot as plt
 
 from FGMN_dataset_2 import FGMNDataset
-from fgmn_layer import FGNet
+from fgmn_layer import FGNet, ValenceNet
 import utils
 
 dim = 64
 bond_type = 4
 lr_mult=1
-b=lr_mult*16
+b=lr_mult*8
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -70,13 +70,19 @@ class Net(torch.nn.Module):
 
         self.linLast = torch.nn.Linear(dim, bond_type)
 
-        self.fB1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="B")
+        self.fB1 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="B")
         self.f_mod_B = torch.nn.ModuleList()
         self.f_mod_B.extend([self.fB1])
 
-        self.fC1 = FGNet(num_iters=1, order=self.order, in_dim=dim, rank=512, fact_type="C")
+        self.fC1 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="C")
         self.f_mod_C = torch.nn.ModuleList()
         self.f_mod_C.extend([self.fC1])
+
+        self.fA1 = FGNet(num_iters=1, in_dim=bond_type, rank=512, fact_type="A")
+        self.f_mod_A = torch.nn.ModuleList()
+        self.f_mod_A.extend([self.fA1])
+
+        self.fA_valence = ValenceNet()
 
         self.weight = Parameter(torch.Tensor(1, dim))
         self.linear = torch.nn.Linear(dim, dim)
@@ -108,6 +114,13 @@ class Net(torch.nn.Module):
             edge_attr_2=data.edge_attr_2,
         )
 
+        fact_l_A = utils.get_edgesedgesfactorsnttypes(
+            adj, dim, bond_type,
+            nodes=data.x,
+            edge_index_2=data.edge_index_2,
+            edge_attr_2=data.edge_attr_2,
+        )
+
         for k in range(3):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
@@ -118,15 +131,13 @@ class Net(torch.nn.Module):
 
         # conv_1 = out
 
-        ################## PREPARING OUT_COMBINE ##########################################################
-        edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
-        out_edges_upscale = self.linUp(out_edges.clone())
-        out_combine = out.clone()
-        out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
-        ##################################################################################################
-
-
         for k in range(1):
+            ################## PREPARING OUT_COMBINE ##########################################################
+            edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
+            out_edges_upscale = self.linUp(out_edges.clone())
+            out_combine = out.clone()
+            out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
+            ##################################################################################################
             all_msg, all_msg_to_edge = None, None
             for i in range(len(fact_l_B)): #this length is always 1
                 msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B").unsqueeze(0)
@@ -137,6 +148,16 @@ class Net(torch.nn.Module):
                 if fact_l_C[i] is not None:
                     msg = self.f_mod_C[k](data.x, out_combine, fact_l_C[i], fact_type="C").unsqueeze(0)
                     all_msg = torch.cat([all_msg, msg])
+
+            for i in range(len(fact_l_A)):
+                if fact_l_A[i] is not None:
+                    # msg_to_edge = self.f_mod_A[k](data.x, out_edges, fact_l_A[i], fact_type="A").unsqueeze(0)
+                    # all_msg_to_edge = torch.cat([all_msg_to_edge, msg_to_edge])
+                    msg_to_edge = self.fA_valence.compute(
+                        data.x, out_edges, fact_l_A[i]
+                    )
+                    msg_to_edge = msg_to_edge.cuda()
+                    all_msg_to_edge = torch.cat([all_msg_to_edge, msg_to_edge])
 
             out = out + F.relu(self.linear((self.weight * all_msg.sum(dim=0))))
             out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * all_msg_to_edge.sum(dim=0))))
