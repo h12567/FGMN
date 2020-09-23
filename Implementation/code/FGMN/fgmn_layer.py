@@ -14,8 +14,7 @@ class ValenceNet():
         }
 
     def compute(self, x, nodes, fact):
-        nodes = nodes.clone()
-        a = 1
+        # nodes = nodes.clone()
         # nodes: (num_nodes, 4)
 
         atom_idxes, edge_idxes = fact[:, 0], fact[:, 1:]
@@ -31,16 +30,23 @@ class ValenceNet():
 
         for msg_to in range(0, edges.size(1)):
             # msg_to = edges.size(1) - 1
+
             edges_clone = edges.clone()
-            temp = edges_clone[:, -1, :]
+            temp = edges_clone[:, -1, :].clone()
             edges_clone[:, -1, :] = edges_clone[:, msg_to, :]
             edges_clone[:, msg_to, :] = temp
+            msg_to_temp = edges.size(1) - 1
+
             msgs = torch.zeros(num_factors, num_edges_per_factor, max_valence + 1, max_bond_type + 1).cuda()
-            msgs = msgs.clone()
-            temp_msg = torch.ones([num_factors, max_valence + 1, max_bond_type + 1]).cuda()
-            for i in range(0, msg_to+1):
+            # msgs = msgs.clone()
+            # temp_msg = torch.ones([num_factors, max_valence + 1, max_bond_type + 1]).cuda()
+            temp_msg = torch.zeros([num_factors, max_valence + 1, max_bond_type + 1]).cuda()
+            for i in range(4):
+                temp_msg[:, i, i] = torch.ones([num_factors])
+            # for i in range(0, msg_to+1):
+            for i in range(0, msg_to_temp+1): #don't pl
                 # temp_msg: (num_factors, max_bond_type)
-                for j in range(max_valence + 1):
+                for j in range(max_valence + 1): # j is current valence REMAINING
                     max_possible_bond_type = min(j, max_bond_type)
                     # temp_msg = torch.tensor([[1] * (max_possible_bond_type + 1)] * num_factors)
                     # sub_temp_msg = temp_msg[:, :(max_possible_bond_type + 1), :]
@@ -48,15 +54,19 @@ class ValenceNet():
                     new_info = edges_clone[:, i, :(max_possible_bond_type+1)]
                     new_info = torch.flip(new_info, [1])
                     new_info = torch.unsqueeze(new_info, 2)
+                    new_info = F.normalize(new_info, p=2, dim=2) # Normalize g
                     msgs = msgs.clone()
-                    msgs[:, i, j, :] = torch.sum(sub_temp_msg * new_info, dim=1).clone()
+                    msgs[:, i, j, :] = torch.sum(sub_temp_msg * new_info, dim=1) #.clone()
                 temp_msg = msgs[:, i, :, :]
 
-            msg_recipient = fact[:, msg_to+1] #(num_factor)
+            msg_recipient = fact[:, msg_to+1] # need to plus one because there is one extra node at begin
             # msg_last = msgs[:, msg_to, :, :] #(num_factor, max_valence+1, max_bond_type)
-            msg_last = msgs[:, -1, :, :].clone()
+            # msg_last = msgs[:, -1, :, :]
+            msg_last = msgs[:, -2, :, :] #.clone() #last column is the msg_to node itself, we should no use
             for i, node_idx in enumerate(msg_recipient):
-                node_msg[0, node_idx, :] = msg_last[i, valences[i], :]
+                node_msg[0, node_idx, :] += msg_last[i, valences[i], :]
+
+            del msgs, temp_msg
 
         return node_msg
 

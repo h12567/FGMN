@@ -19,7 +19,7 @@ import utils
 dim = 64
 bond_type = 4
 lr_mult=1
-b=lr_mult*8
+b=lr_mult*16
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -71,16 +71,25 @@ class Net(torch.nn.Module):
         self.linLast = torch.nn.Linear(dim, bond_type)
 
         self.fB1 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="B")
+        self.fB2 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="B")
+        self.fB3 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="B")
+        self.fB4 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="B")
         self.f_mod_B = torch.nn.ModuleList()
-        self.f_mod_B.extend([self.fB1])
+        self.f_mod_B.extend([self.fB1, self.fB2, self.fB3, self.fB4])
 
         self.fC1 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="C")
+        self.fC2 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="C")
+        self.fC3 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="C")
+        self.fC4 = FGNet(num_iters=1, in_dim=dim, rank=512, fact_type="C")
         self.f_mod_C = torch.nn.ModuleList()
-        self.f_mod_C.extend([self.fC1])
+        self.f_mod_C.extend([self.fC1, self.fC2, self.fC3, self.fC4])
 
         self.fA1 = FGNet(num_iters=1, in_dim=bond_type, rank=512, fact_type="A")
+        self.fA2 = FGNet(num_iters=1, in_dim=bond_type, rank=512, fact_type="A")
+        self.fA3 = FGNet(num_iters=1, in_dim=bond_type, rank=512, fact_type="A")
+        self.fA4 = FGNet(num_iters=1, in_dim=bond_type, rank=512, fact_type="A")
         self.f_mod_A = torch.nn.ModuleList()
-        self.f_mod_A.extend([self.fA1])
+        self.f_mod_A.extend([self.fA1, self.fA2, self.fA3, self.fA4])
 
         self.fA_valence = ValenceNet()
 
@@ -134,9 +143,9 @@ class Net(torch.nn.Module):
         for k in range(1):
             ################## PREPARING OUT_COMBINE ##########################################################
             edge_variable_idxes = torch.flatten((data.x[:, 0] == EDGE_VARIABLE).nonzero())
-            out_edges_upscale = self.linUp(out_edges.clone())
+            out_edges_upscale = self.linUp(out_edges)
             out_combine = out.clone()
-            out_combine[edge_variable_idxes] = out_edges_upscale.clone()[edge_variable_idxes.clone()]
+            out_combine[edge_variable_idxes] = out_edges_upscale[edge_variable_idxes]
             ##################################################################################################
             all_msg, all_msg_to_edge = None, None
             for i in range(len(fact_l_B)): #this length is always 1
