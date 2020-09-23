@@ -16,10 +16,10 @@ from FGMN_dataset_2 import FGMNDataset
 from fgmn_layer import FGNet, ValenceNet
 import utils
 
-dim = 64
+dim = 16
 bond_type = 4
 lr_mult=1
-b=lr_mult*16
+b=lr_mult*1
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -147,11 +147,11 @@ class Net(torch.nn.Module):
             out_combine = out.clone()
             out_combine[edge_variable_idxes] = out_edges_upscale[edge_variable_idxes]
             ##################################################################################################
-            all_msg, all_msg_to_edge = None, None
+            all_msg, all_msg_to_edge_A, all_msg_to_edge_B = None, None, None
             for i in range(len(fact_l_B)): #this length is always 1
                 msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B").unsqueeze(0)
                 msg_to_edge = self.linDown(msg)
-                all_msg, all_msg_to_edge = msg, msg_to_edge
+                all_msg, all_msg_to_edge_B = msg, msg_to_edge
 
             for i in range(len(fact_l_C)):
                 if fact_l_C[i] is not None:
@@ -166,10 +166,15 @@ class Net(torch.nn.Module):
                         data.x, out_edges, fact_l_A[i]
                     )
                     msg_to_edge = msg_to_edge.cuda()
-                    all_msg_to_edge = torch.cat([all_msg_to_edge, msg_to_edge])
+                    if all_msg_to_edge_A is not None:
+                        all_msg_to_edge_A = torch.cat([all_msg_to_edge_A, msg_to_edge])
+                    else:
+                        all_msg_to_edge_A = msg_to_edge
 
+
+            combine_edge_msg = (all_msg_to_edge_A.sum(dim=0) * all_msg_to_edge_B.sum(dim=0))
             out = out + F.relu(self.linear((self.weight * all_msg.sum(dim=0))))
-            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * all_msg_to_edge.sum(dim=0))))
+            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * combine_edge_msg)))
 
 
         # out = F.log_softmax(self.linLast(out), dim=-1
