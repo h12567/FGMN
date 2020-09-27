@@ -16,10 +16,10 @@ from FGMN_dataset_2 import FGMNDataset
 from fgmn_layer import FGNet, ValenceNet
 import utils
 
-dim = 16
+dim = 128
 bond_type = 4
 lr_mult=1
-b=lr_mult*1
+b=lr_mult*8
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -29,6 +29,7 @@ EDGE_FACTOR = 4
 MSP_FACTOR = 5
 
 class Complete(object):
+
     def __call__(self, data):
         device = data.edge_index.device
         data.edge_attr_2 = data.edge_attr.clone()
@@ -148,6 +149,8 @@ class Net(torch.nn.Module):
             out_combine[edge_variable_idxes] = out_edges_upscale[edge_variable_idxes]
             ##################################################################################################
             all_msg, all_msg_to_edge_A, all_msg_to_edge_B = None, None, None
+
+            # one interesting observation:
             for i in range(len(fact_l_B)): #this length is always 1
                 msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B").unsqueeze(0)
                 msg_to_edge = self.linDown(msg)
@@ -173,6 +176,7 @@ class Net(torch.nn.Module):
 
 
             combine_edge_msg = (all_msg_to_edge_A.sum(dim=0) * all_msg_to_edge_B.sum(dim=0))
+            # combine_edge_msg = all_msg_to_edge_B.sum(dim=0)
             out = out + F.relu(self.linear((self.weight * all_msg.sum(dim=0))))
             out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * combine_edge_msg)))
 
@@ -180,6 +184,7 @@ class Net(torch.nn.Module):
         # out = F.log_softmax(self.linLast(out), dim=-1
         out_edges_final = F.log_softmax(out_edges, dim=-1)
         return out_edges_final
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -214,35 +219,39 @@ def train():
     lf = torch.nn.NLLLoss()
     torch.autograd.set_detect_anomaly(True)
     for data in train_loader:
-        data = data.to(device)
-        optimizer.zero_grad()
+        try:
+            data = data.to(device)
+            optimizer.zero_grad()
 
-        # node_input_idx = torch.flatten((data.x[:, 0] <= 3).nonzero())
-        # node_data = data.x[node_input_idx]
-        # factor_idx = torch.flatten((data.x[:, 0] > 3).nonzero())
-        # factor_data = data.x[factor_idx]
+            # node_input_idx = torch.flatten((data.x[:, 0] <= 3).nonzero())
+            # node_data = data.x[node_input_idx]
+            # factor_idx = torch.flatten((data.x[:, 0] > 3).nonzero())
+            # factor_data = data.x[factor_idx]
 
-        edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
-        out = model(data)
-        # pred = torch.argmax(out, dim=1)
-        optimizer.zero_grad()
-        valid_labels = data.y[edge_indicator_idx]
-        valid_out = out[edge_indicator_idx]
-        # loss = lf(out[edge_indicator_idx], data.y[edge_indicator_idx])
-        loss = lf(
-            valid_out.view(-1, 4),
-            valid_labels.view(-1)
-        )
-        # loss = lf(model(data), data.y[edge_indicator_idx])
-        # loss = lf(pred, data.y)
-        loss.backward()
-        print(data)
-        print(str(loss) + "\n")
-        valid_pred = torch.argmax(valid_out, dim=-1)
-        loss_all += loss.item() * data.num_graphs
-        acc_all += accuracy(valid_pred, valid_labels)[0] * data.num_graphs
-        base_acc_all += accuracy(valid_pred, valid_labels)[1] * data.num_graphs
-        optimizer.step()
+            edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
+            out = model(data)
+            # pred = torch.argmax(out, dim=1)
+            optimizer.zero_grad()
+            valid_labels = data.y[edge_indicator_idx]
+            valid_out = out[edge_indicator_idx]
+            # loss = lf(out[edge_indicator_idx], data.y[edge_indicator_idx])
+            loss = lf(
+                valid_out.view(-1, 4),
+                valid_labels.view(-1)
+            )
+            # loss = lf(model(data), data.y[edge_indicator_idx])
+            # loss = lf(pred, data.y)
+            loss.backward()
+            print(data)
+            print(str(loss) + "\n")
+            valid_pred = torch.argmax(valid_out, dim=-1)
+            loss_all += loss.item() * data.num_graphs
+            acc_all += accuracy(valid_pred, valid_labels)[0] * data.num_graphs
+            base_acc_all += accuracy(valid_pred, valid_labels)[1] * data.num_graphs
+            optimizer.step()
+        except Exception as e:
+            print(e)
+            pass
     print("BASE ACCURACY " + str(base_acc_all / len(train_loader.dataset)) + "\n")
     return (loss_all / len(train_loader.dataset)), (acc_all / len(train_loader.dataset))
 
@@ -272,6 +281,11 @@ for i in range(1, 1 + num_epoches):
     loss, acc = train()
     train_loss_list.append(loss)
     train_acc_list.append(acc)
+    if (i % 2 == 0):
+        save_file = "models/model_final_%s.pth" %str(i)
+        torch.save(model.state_dict(), save_file)
+        np.save("acc_data/train_acc_list_final_%s.npy" %str(i), np.array(train_acc_list))
+        np.save("acc_data/train_loss_list_final_%s.npy"%str(i), np.array(train_loss_list))
 plot_result(num_epoches)
 
 save_file = "models/model2.pth"

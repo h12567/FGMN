@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
-from tsfm.Layers import EncoderLayer,DecoderLayer
+from tsfm.Layers import EncoderLayer #,DecoderLayer
 from tsfm.Sublayers import Norm
 from tsfm.Embed import PositionalEncoder
 import matplotlib.pyplot as plt
@@ -127,34 +127,34 @@ class Classify12(nn.Module):
         output = F.log_softmax(output, dim=-1)
         return output  # [batch, edge_num=3, bond=4]
 #with decoder
-class Classify13(nn.Module):
-    def __init__(self, padding_idx):
-        super().__init__()
-        heads = 4
-        self.N = 1
-        self.padding_idx = padding_idx
-        self.embedding = nn.Embedding(msp_len, d_model, self.padding_idx)
-        self.enc_layers = get_clones(EncoderLayer(d_model, heads, dropout), self.N)
-        self.dec_layers = get_clones(DecoderLayer(d_model, heads, dropout), self.N)
-        self.norm = Norm(d_model)
-        #self.ll = nn.Linear(d_model*4, 4)
-    def forward(self, src, dec_input,next_dec,enc_output=None):
-        self.mask = get_pad_mask13(next_dec)  # [batch, edge_num,4]
-        dec_input = dec_input.view(src.size(0),-1)
-        enc_mask = get_pad_mask(src, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
-        if enc_output is None:
-            enc_output = self.embedding(src)  # [batch, k, d_model=512]
-            for i in range(self.N):
-                enc_output = self.enc_layers[i](enc_output,enc_mask)
-        dec_input = self.embedding(dec_input)
-        for i in range(self.N):
-            output = self.dec_layers[i](enc_output,dec_input,None,None)
-        output = output.view(src.size(0),-1)
-        ll = nn.Linear(d_model * len(dec_input[0]), 4)
-        output = ll(output)
-        # output = output.masked_fill(self.mask, -1e9)
-        # output = F.log_softmax(output, dim=-1)
-        return output,enc_output  # [batch, edge_num=3, bond=4]
+# class Classify13(nn.Module):
+#     def __init__(self, padding_idx):
+#         super().__init__()
+#         heads = 4
+#         self.N = 1
+#         self.padding_idx = padding_idx
+#         self.embedding = nn.Embedding(msp_len, d_model, self.padding_idx)
+#         self.enc_layers = get_clones(EncoderLayer(d_model, heads, dropout), self.N)
+#         self.dec_layers = get_clones(DecoderLayer(d_model, heads, dropout), self.N)
+#         self.norm = Norm(d_model)
+#         #self.ll = nn.Linear(d_model*4, 4)
+#     def forward(self, src, dec_input,next_dec,enc_output=None):
+#         self.mask = get_pad_mask13(next_dec)  # [batch, edge_num,4]
+#         dec_input = dec_input.view(src.size(0),-1)
+#         enc_mask = get_pad_mask(src, self.padding_idx).view(src.size(0), -1).unsqueeze(-1)
+#         if enc_output is None:
+#             enc_output = self.embedding(src)  # [batch, k, d_model=512]
+#             for i in range(self.N):
+#                 enc_output = self.enc_layers[i](enc_output,enc_mask)
+#         dec_input = self.embedding(dec_input)
+#         for i in range(self.N):
+#             output = self.dec_layers[i](enc_output,dec_input,None,None)
+#         output = output.view(src.size(0),-1)
+#         ll = nn.Linear(d_model * len(dec_input[0]), 4)
+#         output = ll(output)
+#         # output = output.masked_fill(self.mask, -1e9)
+#         # output = F.log_softmax(output, dim=-1)
+#         return output,enc_output  # [batch, edge_num=3, bond=4]
 
 def getInput11(vertex, msp):
     # [A1-weight, A2-weight, 1 1 0,A1, A3,1 1 1  A2, A3,1 0 0 msp1[x], ...,mspk[x]] 45 = k + edge_num* *
@@ -227,7 +227,8 @@ def accuracy(preds_bond,label_graph,vertex):
         accs.append(round(acc/(count+np.finfo(np.float32).eps),4))
     return accs, preds_graph
 # model
-model = Classify12(padding_idx)
+# model = Classify12(padding_idx)
+model = Classify11(padding_idx)
 optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
 criterion = nn.NLLLoss(ignore_index=padding_idx)  # CrossEntropyLoss()
 
@@ -664,8 +665,8 @@ def train_transformer(epoch, num):
     plot_result(epoch)
 
 train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list, test_acc_list, test_loss_list = [],[],[],[], [], []
-train_transformer(200,num=range(1500))
+# train_transformer(200,num=range(1500))
 
 # #Testing
-# model.load_state_dict(torch.load('model_type11.pkl'))
-# evaluate11(model,1,range(16))
+model.load_state_dict(torch.load('model_type11.pkl'))
+evaluate11(model,1,range(16))

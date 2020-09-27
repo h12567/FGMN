@@ -54,7 +54,7 @@ class ValenceNet():
                     new_info = edges_clone[:, i, :(max_possible_bond_type+1)]
                     new_info = torch.flip(new_info, [1])
                     new_info = torch.unsqueeze(new_info, 2)
-                    new_info = F.normalize(new_info, p=2, dim=2) # Normalize g
+                    new_info = F.normalize(new_info, p=1, dim=2) # Normalize g
                     msgs = msgs.clone()
                     msgs[:, i, j, :] = torch.sum(sub_temp_msg * new_info, dim=1) #.clone()
                 temp_msg = msgs[:, i, :, :]
@@ -66,7 +66,7 @@ class ValenceNet():
             for i, node_idx in enumerate(msg_recipient):
                 node_msg[0, node_idx, :] += msg_last[i, valences[i], :]
 
-            del msgs, temp_msg
+            # del msgs, temp_msg
 
         return node_msg
 
