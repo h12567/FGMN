@@ -665,8 +665,5 @@ def train_transformer(epoch, num):
     plot_result(epoch)
 
 train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list, test_acc_list, test_loss_list = [],[],[],[], [], []
-# train_transformer(200,num=range(1500))
+train_transformer(200,num=range(1500))
 
-# #Testing
-model.load_state_dict(torch.load('model_type11.pkl'))
-evaluate11(model,1,range(16))
