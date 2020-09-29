@@ -3,7 +3,13 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 
+MULTIPLY_MODE = 0
+ADDITION_MODE = 1
+
 class ValenceNet():
+    MULTIPLY_MODE = MULTIPLY_MODE
+    ADDITION_MODE = ADDITION_MODE
+
     def __init__(self):
         # super(ValenceNet, self).__init__()
         self.atom_valence_mapping = {
@@ -13,7 +19,7 @@ class ValenceNet():
             3: 3, #Nitrogen
         }
 
-    def compute(self, x, nodes, fact):
+    def compute(self, x, nodes, fact, combine_mode=MULTIPLY_MODE):
         # nodes = nodes.clone()
         # nodes: (num_nodes, 4)
 
@@ -64,7 +70,19 @@ class ValenceNet():
             # msg_last = msgs[:, -1, :, :]
             msg_last = msgs[:, -2, :, :] #.clone() #last column is the msg_to node itself, we should no use
             for i, node_idx in enumerate(msg_recipient):
-                node_msg[0, node_idx, :] += msg_last[i, valences[i], :]
+                if node_idx == 39:
+                    a = 1
+
+                if combine_mode == ADDITION_MODE:
+                    node_msg[0, node_idx, :] += msg_last[i, valences[i], :]
+                elif combine_mode == MULTIPLY_MODE:
+                    if node_msg[0, node_idx, :].sum() == 0:
+                        node_msg[0, node_idx, :] = msg_last[i, valences[i], :]
+                    else:
+                        node_msg[0, node_idx, :] *= msg_last[i, valences[i], :]
+                else:
+                    raise Exception("Wrong combine mode")
+                    print("Wrong combine mode")
 
             # del msgs, temp_msg
 

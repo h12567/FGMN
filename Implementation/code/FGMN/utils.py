@@ -120,7 +120,7 @@ def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_a
     while i < (edge_index_short_2.shape[1] - 1):
 
         atom_node_idx_arr = []
-        while i < (edge_index_short_2.shape[1] - 1) and edge_index_short_2[0][i] == cur_atom_node_idx:
+        while i < (edge_index_short_2.shape[1]) and edge_index_short_2[0][i] == cur_atom_node_idx:
             atom_node_idx_arr.append(edge_index_short_2[1][i])
             i += 1
 
@@ -135,6 +135,7 @@ def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_a
         else:
             fact_l[fact_len_idx] = tmp.view(1, -1)
 
-        cur_atom_node_idx = edge_index_short_2[0][i]
+        if i < (edge_index_short_2.shape[1]):
+            cur_atom_node_idx = edge_index_short_2[0][i]
 
     return fact_l
