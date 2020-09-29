@@ -307,7 +307,7 @@ def evaluate11(model, epoch, num):
             losses = []
             for al in atom_lists:
                 new_E = getInput.getGraph(labels_graph[0], al)
-                labels = getLabel(new_E)
+                labels = getLabel([new_E], vertex_data[i:i + seq_len])
                 loss = criterion(preds.view(-1, 4), labels.view(-1))
                 losses.append(loss)
             loss = min(losses)
@@ -401,7 +401,7 @@ def evaluate12(model, epoch, num):
             losses = []
             for al in atom_lists:
                 new_E = getInput.getGraph(labels_graph[0], al)
-                labels = getLabel(new_E)
+                labels = getLabel([new_E], vertex_data[i:i + seq_len])
                 loss = criterion(preds.view(-1, 4), labels.view(-1))
                 losses.append(loss)
             loss = min(losses)
@@ -665,7 +665,7 @@ def train_transformer(epoch, num):
     plot_result(epoch)
 
 train_acc_list, tran_loss_list, valid_acc_list, valid_loss_list, test_acc_list, test_loss_list = [],[],[],[], [], []
-# train_transformer(200,num=range(1500))
+#train_transformer(200,num=range(1500))
 
 # #Testing
 model.load_state_dict(torch.load('model_type11.pkl'))

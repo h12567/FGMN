@@ -160,7 +160,7 @@ def evaluate1(model, epoch, num):
             losses = []
             for al in atom_lists:
                 new_E = getInput.getGraph(labels_graph[0], al)
-                labels = getLabel(new_E)
+                labels = getLabel([new_E], vertex_data[i:i + seq_len])
                 loss = criterion(preds.view(-1, 4), labels.view(-1))
                 losses.append(loss)
             loss = min(losses)
@@ -247,5 +247,5 @@ e= time.time()
 print(e-s)
 
 # #Testing
-# model.load_state_dict(torch.load('model_type1.pkl'))
-# evaluate1(model,1,range(1600, 1610))
+model.load_state_dict(torch.load('model_linear_1.pkl'))
+evaluate1(model,1,range(1600, 1610))
