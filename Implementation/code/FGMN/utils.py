@@ -72,7 +72,7 @@ def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr
 
     edge_index_short = edge_index_2[:, mspatom_edge_idxes]
 
-    fact_l = [None] * (14-6+1)
+    fact_l = [None] * (14+3-6+1)
     fact_dim_l = []
 
     i = 0
@@ -103,7 +103,13 @@ def get_mspatomfactorsntypes(adj, dim, bond_type, nodes, edge_index_2, edge_attr
     # output: list of fact, where each fact is (num_factors, 6 -> 14)
     return fact_l
 
-def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_attr_2):
+def get_edgesedgesfactorsnttypes(x, adj, dim, bond_type, nodes, edge_index_2, edge_attr_2):
+    atom_valence_mapping = {
+        0: 4,  # Carbon
+        1: 1,  # Hydrogen
+        2: 2,  # Oxygen
+        3: 3,  # Nitrogen
+    }
     edgeedge_edge_idxes = torch.flatten((edge_attr_2[:, 0] == EDGEEDGE_EDGE_INDEX).nonzero())
 
     edge_index_short = edge_index_2[:, edgeedge_edge_idxes]
@@ -112,7 +118,7 @@ def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_a
 
     edge_index_short_2 = edge_index_short[:, sort_idx.indices]
 
-    fact_l = [None] * (12 - 4 + 1)
+    fact_l = [None] * (12 + 3 - 4 + 1)
 
     i = 0
     cur_atom_node_idx = edge_index_short_2[0][i]
@@ -130,10 +136,12 @@ def get_edgesedgesfactorsnttypes(adj, dim, bond_ype, nodes, edge_index_2, edge_a
 
         fact_len_idx = len(atom_node_idx_arr) - 4
 
-        if fact_l[fact_len_idx] is not None:
-            fact_l[fact_len_idx] = torch.cat([fact_l[fact_len_idx], tmp.view(1, -1)])
-        else:
-            fact_l[fact_len_idx] = tmp.view(1, -1)
+        # check if not hydrogen
+        if x[cur_atom_node_idx][1] != 1:
+            if fact_l[fact_len_idx] is not None:
+                fact_l[fact_len_idx] = torch.cat([fact_l[fact_len_idx], tmp.view(1, -1)])
+            else:
+                fact_l[fact_len_idx] = tmp.view(1, -1)
 
         if i < (edge_index_short_2.shape[1]):
             cur_atom_node_idx = edge_index_short_2[0][i]

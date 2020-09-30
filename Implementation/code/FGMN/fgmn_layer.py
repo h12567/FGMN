@@ -70,8 +70,6 @@ class ValenceNet():
             # msg_last = msgs[:, -1, :, :]
             msg_last = msgs[:, -2, :, :] #.clone() #last column is the msg_to node itself, we should no use
             for i, node_idx in enumerate(msg_recipient):
-                if node_idx == 39:
-                    a = 1
 
                 if combine_mode == ADDITION_MODE:
                     node_msg[0, node_idx, :] += msg_last[i, valences[i], :]
@@ -97,7 +95,7 @@ class HighOrderNet(nn.Module):
         self.fc = nn.Linear(self.hidden_dim, out_dim, bias=True)
         self.linear_list = nn.ModuleList()
 
-        self.max_num_atoms = 13
+        self.max_num_atoms = 13 + 3
         self.max_msp_index = 1000
         self.fact_type = fact_type
 
@@ -152,7 +150,7 @@ class FGNet(nn.Module):
         # self.latent_dim = 64
         self.latent_dim = in_dim
         self.bond_type = 4
-        self.max_num_atoms = 13
+        self.max_num_atoms = 13 + 3
         self.max_msp_index = 1000
         if fact_type not in ["A", "B", "C"]:
             raise Exception("Must specify factor type correctly")
@@ -166,7 +164,7 @@ class FGNet(nn.Module):
             self.num_params = self.max_num_atoms
 
         self.highorder_func = nn.ModuleList()
-        self.max_order = 14
+        self.max_order = 14 + 3
         for i in range(self.max_order):
             self.highorder_func.append(HighOrderNet(
                 in_dim=self.latent_dim, out_dim=self.latent_dim,

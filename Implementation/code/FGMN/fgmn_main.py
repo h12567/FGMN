@@ -16,10 +16,10 @@ from FGMN_dataset_2 import FGMNDataset
 from fgmn_layer import FGNet, ValenceNet
 import utils
 
-dim = 128
+dim = 64
 bond_type = 4
 lr_mult=1
-b=lr_mult*8
+b=lr_mult*32
 num_epoches=100
 NUM_MSP_PEAKS = 16
 ATOM_VARIABLE = 1
@@ -125,13 +125,13 @@ class Net(torch.nn.Module):
         )
 
         fact_l_A = utils.get_edgesedgesfactorsnttypes(
-            adj, dim, bond_type,
+            data.x, adj, dim, bond_type,
             nodes=data.x,
             edge_index_2=data.edge_index_2,
             edge_attr_2=data.edge_attr_2,
         )
 
-        for k in range(3):
+        for k in range(1):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
             out = out.squeeze(0)
@@ -175,11 +175,11 @@ class Net(torch.nn.Module):
                         all_msg_to_edge_A = msg_to_edge
 
 
-            combine_edge_msg = (all_msg_to_edge_A.sum(dim=0) * all_msg_to_edge_B.sum(dim=0))
+            # combine_edge_msg = (all_msg_to_edge_A.sum(dim=0) * all_msg_to_edge_B.sum(dim=0))
             # combine_edge_msg = all_msg_to_edge_B.sum(dim=0)
             out = out + F.relu(self.linear((self.weight * all_msg.sum(dim=0))))
-            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * combine_edge_msg)))
-
+            # out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * combine_edge_msg)))
+            out_edges = out_edges + F.relu(self.linear_edges((self.weight_edges * all_msg_to_edge_B.sum(dim=0)))) * all_msg_to_edge_A.sum(dim=0)
 
         # out = F.log_softmax(self.linLast(out), dim=-1
         out_edges_final = F.log_softmax(out_edges, dim=-1)
@@ -219,7 +219,7 @@ def train():
     lf = torch.nn.NLLLoss()
     torch.autograd.set_detect_anomaly(True)
     for data in train_loader:
-        try:
+        # try:
             data = data.to(device)
             optimizer.zero_grad()
 
@@ -232,6 +232,25 @@ def train():
             out = model(data)
             # pred = torch.argmax(out, dim=1)
             optimizer.zero_grad()
+
+            ######### START FILTERING OUT HYDROGEN ATOMS ###################################################
+            edge_attr = data.edge_attr_2[:, :4].contiguous()
+            adj = to_dense_adj(data.edge_index_2, batch=None,
+                               edge_attr=edge_attr.argmax(-1) + 1).squeeze(0)
+            atom_idxes = torch.flatten((data.x[:, 0] == ATOM_VARIABLE).nonzero())
+            atoms = data.x[atom_idxes]
+            hydro_atom_idxes = torch.flatten((atoms[:, 1] == 1).nonzero())
+
+            a = []
+            for i, idx in enumerate(edge_indicator_idx[:, 0]):
+                val = adj[idx][hydro_atom_idxes].sum()
+                if val == 0:
+                    a.append(i)
+
+            edge_indicator_idx = edge_indicator_idx[a]
+            ######### END FILTERING OUT HYDROGEN ATOMS ###################################################
+
+
             valid_labels = data.y[edge_indicator_idx]
             valid_out = out[edge_indicator_idx]
             # loss = lf(out[edge_indicator_idx], data.y[edge_indicator_idx])
@@ -247,13 +266,15 @@ def train():
             valid_pred = torch.argmax(valid_out, dim=-1)
             loss_all += loss.item() * data.num_graphs
             acc_all += accuracy(valid_pred, valid_labels)[0] * data.num_graphs
+            print("ACCUMULATED ACC " + str(acc_all / len(train_loader.dataset)))
             base_acc_all += accuracy(valid_pred, valid_labels)[1] * data.num_graphs
             optimizer.step()
-        except Exception as e:
-            print(e)
-            pass
+        # except Exception as e:
+        #     print(e)
+        #     pass
     print("BASE ACCURACY " + str(base_acc_all / len(train_loader.dataset)) + "\n")
     return (loss_all / len(train_loader.dataset)), (acc_all / len(train_loader.dataset))
+
 
 train_acc_list, train_loss_list = [], []
 
@@ -282,10 +303,10 @@ for i in range(1, 1 + num_epoches):
     train_loss_list.append(loss)
     train_acc_list.append(acc)
     if (i % 2 == 0):
-        save_file = "models/model_final_%s.pth" %str(i)
+        save_file = "models/model_final_fix_valence_%s.pth" %str(i)
         torch.save(model.state_dict(), save_file)
-        np.save("acc_data/train_acc_list_final_%s.npy" %str(i), np.array(train_acc_list))
-        np.save("acc_data/train_loss_list_final_%s.npy"%str(i), np.array(train_loss_list))
+        np.save("acc_data/train_acc_list_final_fix_valence_%s.npy" %str(i), np.array(train_acc_list))
+        np.save("acc_data/train_loss_list_final_fix_valence_%s.npy"%str(i), np.array(train_loss_list))
 plot_result(num_epoches)
 
 save_file = "models/model2.pth"

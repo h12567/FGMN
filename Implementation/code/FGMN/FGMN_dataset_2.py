@@ -1,5 +1,6 @@
 import numpy as np
 import os.path as osp
+import copy
 import pathlib
 import torch
 from torch_geometric.data import InMemoryDataset
@@ -84,6 +85,33 @@ class FGMNDataset(InMemoryDataset):
             #                        + [-1] * (13 - num_atoms))
             # factor_labels.append(-1)
 
+    def add_hydrogens(self, atom_arr, mol_adj_arr):
+        valence_mapping = {
+            0: 4, #Carbon
+            1: 1, #Hydrogen
+            2: 2, #Oxygen
+            3: 3, #Nitrogen
+        }
+        new_atom_arr = copy.deepcopy(atom_arr)
+        cur_col = atom_arr.shape[0]
+        # total_valences = 0
+        # for i in range(atom_arr.shape[0]):
+        #     total_valences += valence_mapping[atom_arr[i]]
+        # miss_H = (total_valences * 2 - mol_adj_arr[i].sum())
+        new_mol_adj_arr = np.zeros((mol_adj_arr.shape[0]+3, mol_adj_arr.shape[0]+3))
+        new_mol_adj_arr[:mol_adj_arr.shape[0], :mol_adj_arr.shape[0]] = mol_adj_arr
+        max_miss_H = 0
+        for i in range(atom_arr.shape[0]):
+            cur_valence = mol_adj_arr[i].sum()
+            missing_valence = valence_mapping[atom_arr[i]] - cur_valence
+            for j in range(int(missing_valence)):
+                new_mol_adj_arr[i, cur_col+j] = 1
+                new_mol_adj_arr[cur_col+j, i] = 1
+            max_miss_H = max(max_miss_H, int(missing_valence))
+        for i in range(max_miss_H):
+            new_atom_arr = np.append(new_atom_arr, 1)
+        return new_atom_arr, new_mol_adj_arr
+
     def process(self):
         # min_len: 5, max_len: 13
         atom_arr_all = np.load(pathlib.Path(self.raw_paths[0]), allow_pickle=True)
@@ -91,9 +119,16 @@ class FGMNDataset(InMemoryDataset):
         mol_adj_arr_all = np.load(pathlib.Path(self.raw_paths[1]), allow_pickle=True)
         msp_arr_all = np.load(pathlib.Path(self.raw_paths[2]), allow_pickle=True)
 
+        new_mol_adj_arr_all = np.zeros((
+            mol_adj_arr_all.shape[0], mol_adj_arr_all.shape[1]+3, mol_adj_arr_all.shape[2]+3
+        ))
+        for i, (atom_arr, mol_adj_arr) in enumerate(zip(atom_arr_all, mol_adj_arr_all)):
+            new_atom_arr, new_mol_adj_arr = self.add_hydrogens(atom_arr, mol_adj_arr)
+            atom_arr_all[i], new_mol_adj_arr_all[i] = new_atom_arr, new_mol_adj_arr
+
         data_list = []
         for i in range(atom_arr_all.shape[0]):
-            atom_arr, mol_adj_arr, msp_arr = atom_arr_all[i], mol_adj_arr_all[i], msp_arr_all[i]
+            atom_arr, mol_adj_arr, msp_arr = atom_arr_all[i], new_mol_adj_arr_all[i], msp_arr_all[i]
             node_features, node_labels, edge_idx, edge_attr = [], [], [], []
             factor_features, factor_labels = [], []
             self.get_atom_nodes(atom_arr, node_features, node_labels)
