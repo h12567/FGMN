@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
@@ -60,7 +62,7 @@ class ValenceNet():
                     new_info = edges_clone[:, i, :(max_possible_bond_type+1)]
                     new_info = torch.flip(new_info, [1])
                     new_info = torch.unsqueeze(new_info, 2)
-                    new_info = F.normalize(new_info, p=1, dim=2) # Normalize g
+                    new_info = F.normalize(new_info, p=1, dim=1) # Normalize g
                     msgs = msgs.clone()
                     msgs[:, i, j, :] = torch.sum(sub_temp_msg * new_info, dim=1) #.clone()
                 temp_msg = msgs[:, i, :, :]
@@ -101,13 +103,22 @@ class HighOrderNet(nn.Module):
 
         if self.fact_type == "B":
             self.num_params = self.max_num_atoms**2
+            # self.num_params = 1
         elif self.fact_type == "C":
-            self.num_params = self.max_msp_index
+            # self.num_params = self.max_msp_index
+            self.num_params = 1
         elif self.fact_type == "A":
             self.num_params = self.max_num_atoms
 
         self.params = Parameter(torch.FloatTensor(self.num_params, self.hidden_dim, self.out_dim))
         self.bias = Parameter(torch.FloatTensor(self.num_params, 1, self.out_dim))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.params.size(2))
+        self.params.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, x, fact, inp, msg_to, order, fact_type):
         isfirst = True
@@ -125,9 +136,11 @@ class HighOrderNet(nn.Module):
             atom_pairs = x[fact.clone()[:, 0]][:, 1:].clone()
             ids = atom_pairs[:, 0] * self.max_num_atoms + atom_pairs[:, 1]
             ids = ids.clone()
+            # ids = torch.tensor([0] * len(fact)).cuda()
         elif self.fact_type == "C":
-            msp_nodes = x[fact[:, 0]][:, 2]
-            ids = msp_nodes
+            # msp_nodes = x[fact[:, 0]][:, 2]
+            # ids = msp_nodes
+            ids = torch.tensor([0] * len(fact)).cuda()
         elif self.fact_type == "A":
             atom_nodes = x[fact[:, 0]][:, 1]
             ids = atom_nodes
@@ -158,8 +171,10 @@ class FGNet(nn.Module):
 
         if self.fact_type == "B":
             self.num_params = self.max_num_atoms**2
+            # self.num_params = 1
         elif self.fact_type == "C":
-            self.num_params = self.max_msp_index
+            # self.num_params = self.max_msp_index
+            self.num_params = 1
         elif self.fact_type == "A":
             self.num_params = self.max_num_atoms
 
@@ -173,8 +188,20 @@ class FGNet(nn.Module):
 
         self.params = Parameter(torch.FloatTensor(self.num_params, self.latent_dim, self.rank))
         self.bias = Parameter(torch.FloatTensor(self.num_params, 1, self.rank))
+        self.reset_parameters()
 
-    def forward(self, x, nodes, fact, fact_type=None):
+    def reset_parameters(self):
+        for (name, module) in self._modules.items():
+            if isinstance(module, nn.ModuleList):
+                for mod in module:
+                    mod.reset_parameters()
+
+        stdv = 1. / math.sqrt(self.params.size(2))
+        self.params.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, x, nodes, fact, fact_type=None, a=None):
         numer = torch.arange(0, fact.size(0), dtype=torch.long, device=nodes.device)
 
         # if fact_type == "A":
@@ -199,9 +226,11 @@ class FGNet(nn.Module):
                 atom_pairs = x[fact.clone()[:, 0]][:, 1:].clone()
                 ids = atom_pairs[:, 0] * self.max_num_atoms + atom_pairs[:, 1]
                 ids = ids.clone()
+                # ids = torch.tensor([0] * len(fact)).cuda()
             elif self.fact_type == "C":
-                msp_nodes = x[fact[:, 0]][:, 2]
-                ids = msp_nodes
+                # msp_nodes = x[fact[:, 0]][:, 2]
+                # ids = msp_nodes
+                ids = torch.tensor([0] * len(fact)).cuda()
             elif self.fact_type == "A":
                 atom_nodes = x[fact[:, 0]][:, 1]
                 ids = atom_nodes

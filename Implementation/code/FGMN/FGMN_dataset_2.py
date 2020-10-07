@@ -23,8 +23,10 @@ class FGMNDataset(InMemoryDataset):
     @property
     def raw_file_names(self):
         return [
-            "vertex_arr_sort_per.npy",
-            "mol_adj_arr_sort_per.npy",
+            # "vertex_arr_sort_per.npy",
+            "vertex_arr_test.npy",
+            # "mol_adj_arr_sort_per.npy",
+            "mol_adj_arr_test.npy",
             "msp_arr_sort_per.npy",
         ]
 
@@ -93,7 +95,7 @@ class FGMNDataset(InMemoryDataset):
             3: 3, #Nitrogen
         }
         new_atom_arr = copy.deepcopy(atom_arr)
-        cur_col = atom_arr.shape[0]
+        cur_col = len(atom_arr)
         # total_valences = 0
         # for i in range(atom_arr.shape[0]):
         #     total_valences += valence_mapping[atom_arr[i]]
@@ -101,7 +103,7 @@ class FGMNDataset(InMemoryDataset):
         new_mol_adj_arr = np.zeros((mol_adj_arr.shape[0]+3, mol_adj_arr.shape[0]+3))
         new_mol_adj_arr[:mol_adj_arr.shape[0], :mol_adj_arr.shape[0]] = mol_adj_arr
         max_miss_H = 0
-        for i in range(atom_arr.shape[0]):
+        for i in range(len(atom_arr)):
             cur_valence = mol_adj_arr[i].sum()
             missing_valence = valence_mapping[atom_arr[i]] - cur_valence
             for j in range(int(missing_valence)):

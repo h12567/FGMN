@@ -9,6 +9,7 @@ from torch.nn import Sequential, Linear, ReLU, GRU
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import NNConv, Set2Set
 from torch_geometric.utils import remove_self_loops, to_dense_adj
+from torch_geometric.nn.inits import *
 import torch_geometric.transforms as T
 import matplotlib.pyplot as plt
 
@@ -27,6 +28,8 @@ EDGE_VARIABLE = 2
 MSP_VARIABLE = 3
 EDGE_FACTOR = 4
 MSP_FACTOR = 5
+
+a = 1
 
 class Complete(object):
 
@@ -98,6 +101,8 @@ class Net(torch.nn.Module):
         self.linear = torch.nn.Linear(dim, dim)
         self.weight_edges = Parameter(torch.Tensor(1, bond_type))
         self.linear_edges = torch.nn.Linear(bond_type, bond_type)
+        zeros(self.weight)
+        zeros(self.weight_edges)
 
     def forward(self, data):
         # nodes = data.x
@@ -131,7 +136,7 @@ class Net(torch.nn.Module):
             edge_attr_2=data.edge_attr_2,
         )
 
-        for k in range(1):
+        for k in range(3):
             m = F.relu(self.conv(out, data.edge_index_2, data.edge_attr_2))
             out, h = self.gru(m.unsqueeze(0), h)
             out = out.squeeze(0)
@@ -152,7 +157,7 @@ class Net(torch.nn.Module):
 
             # one interesting observation:
             for i in range(len(fact_l_B)): #this length is always 1
-                msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B").unsqueeze(0)
+                msg = self.f_mod_B[k](data.x, out_combine, fact_l_B[i], fact_type="B", a=a).unsqueeze(0)
                 msg_to_edge = self.linDown(msg)
                 all_msg, all_msg_to_edge_B = msg, msg_to_edge
 
@@ -192,15 +197,19 @@ torch.manual_seed(3)
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'FGMN')
 transform = T.Compose([Complete()])
-dataset = FGMNDataset(path, transform=transform).shuffle()
+dataset = FGMNDataset(path, transform=transform) #.shuffle()
 
-train_loader = DataLoader(dataset, batch_size=b, shuffle=False)
+train_loader = DataLoader(dataset[:1500], batch_size=b, shuffle=False)
+val_loader = DataLoader(dataset[1500:1700], batch_size=b, shuffle=False)
+test_loader = DataLoader(dataset[1700:], batch_size=b, shuffle=False)
 
 model = Net().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001*lr_mult)
+# optimizer = torch.optim.Adam(model.parameters(), lr=0.01*lr_mult)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0004*lr_mult)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                        factor=0.7, patience=5,
                                                        min_lr=0.00001)
+
 
 def accuracy(pred, target):
     total_match = 0
@@ -218,8 +227,9 @@ def train():
     # lf = torch.nn.L1Loss()
     lf = torch.nn.NLLLoss()
     torch.autograd.set_detect_anomaly(True)
+    m = 0
     for data in train_loader:
-        # try:
+        try:
             data = data.to(device)
             optimizer.zero_grad()
 
@@ -229,9 +239,10 @@ def train():
             # factor_data = data.x[factor_idx]
 
             edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
+            global a
+            a = edge_indicator_idx
             out = model(data)
             # pred = torch.argmax(out, dim=1)
-            optimizer.zero_grad()
 
             ######### START FILTERING OUT HYDROGEN ATOMS ###################################################
             edge_attr = data.edge_attr_2[:, :4].contiguous()
@@ -239,12 +250,14 @@ def train():
                                edge_attr=edge_attr.argmax(-1) + 1).squeeze(0)
             atom_idxes = torch.flatten((data.x[:, 0] == ATOM_VARIABLE).nonzero())
             atoms = data.x[atom_idxes]
-            hydro_atom_idxes = torch.flatten((atoms[:, 1] == 1).nonzero())
+            hydro_atom_idxes = atom_idxes[torch.flatten((atoms[:, 1] == 1).nonzero())]
 
             a = []
             for i, idx in enumerate(edge_indicator_idx[:, 0]):
                 val = adj[idx][hydro_atom_idxes].sum()
-                if val == 0:
+                edge_node_ = data.x[idx]
+                # assert edge_node_[0] == ATOM_VARIABLE
+                if val == 0 and (edge_node_[1] > 2 or edge_node_[2] > 2):
                     a.append(i)
 
             edge_indicator_idx = edge_indicator_idx[a]
@@ -266,15 +279,80 @@ def train():
             valid_pred = torch.argmax(valid_out, dim=-1)
             loss_all += loss.item() * data.num_graphs
             acc_all += accuracy(valid_pred, valid_labels)[0] * data.num_graphs
-            print("ACCUMULATED ACC " + str(acc_all / len(train_loader.dataset)))
+            m += data.num_graphs
+            print("ACCUMULATED ACC " + str(acc_all / m))
             base_acc_all += accuracy(valid_pred, valid_labels)[1] * data.num_graphs
             optimizer.step()
-        # except Exception as e:
-        #     print(e)
-        #     pass
+        except Exception as e:
+            print(e)
+            pass
     print("BASE ACCURACY " + str(base_acc_all / len(train_loader.dataset)) + "\n")
     return (loss_all / len(train_loader.dataset)), (acc_all / len(train_loader.dataset))
 
+@torch.no_grad()
+def test(loader_):
+    model.eval()
+    loss_all, acc_all, base_acc_all = 0, 0, 0
+    # lf = torch.nn.L1Loss()
+    lf = torch.nn.NLLLoss()
+    # torch.autograd.set_detect_anomaly(True)
+    m = 0
+    for data in loader_:
+        try:
+            data = data.to(device)
+            # node_input_idx = torch.flatten((data.x[:, 0] <= 3).nonzero())
+            # node_data = data.x[node_input_idx]
+            # factor_idx = torch.flatten((data.x[:, 0] > 3).nonzero())
+            # factor_data = data.x[factor_idx]
+            edge_indicator_idx = (torch.Tensor([x[0] for x in data.x]) == EDGE_VARIABLE).nonzero()
+            global a
+            a = edge_indicator_idx
+            out = model(data)
+            # pred = torch.argmax(out, dim=1)
+
+            ######### START FILTERING OUT HYDROGEN ATOMS ###################################################
+            edge_attr = data.edge_attr_2[:, :4].contiguous()
+            adj = to_dense_adj(data.edge_index_2, batch=None,
+                               edge_attr=edge_attr.argmax(-1) + 1).squeeze(0)
+            atom_idxes = torch.flatten((data.x[:, 0] == ATOM_VARIABLE).nonzero())
+            atoms = data.x[atom_idxes]
+            hydro_atom_idxes = atom_idxes[torch.flatten((atoms[:, 1] == 1).nonzero())]
+
+            a = []
+            for i, idx in enumerate(edge_indicator_idx[:, 0]):
+                val = adj[idx][hydro_atom_idxes].sum()
+                edge_node_ = data.x[idx]
+                assert edge_node_[0] == ATOM_VARIABLE
+                if val == 0 and (edge_node_[1] > 2 or edge_node_[2] > 2):
+                    a.append(i)
+
+
+            edge_indicator_idx = edge_indicator_idx[a]
+            ######### END FILTERING OUT HYDROGEN ATOMS ###################################################
+
+
+            valid_labels = data.y[edge_indicator_idx]
+            valid_out = out[edge_indicator_idx]
+            # loss = lf(out[edge_indicator_idx], data.y[edge_indicator_idx])
+            loss = lf(
+                valid_out.view(-1, 4),
+                valid_labels.view(-1)
+            )
+            # loss = lf(model(data), data.y[edge_indicator_idx])
+            # loss = lf(pred, data.y)
+            print(data)
+            print(str(loss) + "\n")
+            valid_pred = torch.argmax(valid_out, dim=-1)
+            loss_all += loss.item() * data.num_graphs
+            acc_all += accuracy(valid_pred, valid_labels)[0] * data.num_graphs
+            m += data.num_graphs
+            print("ACCUMULATED ACC TEST" + str(acc_all / m))
+            base_acc_all += accuracy(valid_pred, valid_labels)[1] * data.num_graphs
+        except Exception as e:
+            print(e)
+            pass
+    print("BASE ACCURACY TEST" + str(base_acc_all / len(loader_.dataset)) + "\n")
+    return (loss_all / len(loader_.dataset)), (acc_all / len(loader_.dataset))
 
 train_acc_list, train_loss_list = [], []
 
@@ -296,17 +374,23 @@ def plot_result(num_epoches):
     plt.show()
 
 print("Started training")
-lr = scheduler.optimizer.param_groups[0]['lr']
-for i in range(1, 1 + num_epoches):
+model.load_state_dict(torch.load('models/model_final_fix_valence_fix_init_0.001_4.pth'))
+train_loss_list = list(np.load("acc_data/train_acc_list_final_fix_valence_fix_init_0.001_4.npy", allow_pickle=True))
+train_acc_list = list(np.load("acc_data/train_loss_list_final_fix_valence_fix_init_0.001_4.npy", allow_pickle=True))
+for i in range(2, 1 + num_epoches):
     print("Start epoch " + str(i))
+    lr = scheduler.optimizer.param_groups[0]['lr']
     loss, acc = train()
+    val_loss, val_acc = test(val_loader)
     train_loss_list.append(loss)
     train_acc_list.append(acc)
-    if (i % 2 == 0):
-        save_file = "models/model_final_fix_valence_%s.pth" %str(i)
-        torch.save(model.state_dict(), save_file)
-        np.save("acc_data/train_acc_list_final_fix_valence_%s.npy" %str(i), np.array(train_acc_list))
-        np.save("acc_data/train_loss_list_final_fix_valence_%s.npy"%str(i), np.array(train_loss_list))
+    scheduler.step(loss)
+    # if (i % 2 == 0):
+    save_file = "models/model_final_fix_valence_fix_init_0.001_%s.pth" %str(i)
+    torch.save(model.state_dict(), save_file)
+    np.save("acc_data/train_acc_list_final_fix_valence_fix_init_0.001_%s.npy" %str(i), np.array(train_acc_list))
+    np.save("acc_data/train_loss_list_final_fix_valence_fix_init_0.001_%s.npy"%str(i), np.array(train_loss_list))
+    print("LR " + str(lr))
 plot_result(num_epoches)
 
 save_file = "models/model2.pth"
